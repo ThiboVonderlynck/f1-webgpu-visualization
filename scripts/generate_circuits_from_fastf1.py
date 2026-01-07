@@ -2,6 +2,7 @@ import fastf1
 import numpy as np
 from scipy.interpolate import interp1d
 from stl import mesh
+import json
 import os
 import sys
 
@@ -300,12 +301,51 @@ def save_circuit_stl(telemetry_data: dict, output_dir: str):
     filename = sanitize_filename(circuit_name)
     output_path = os.path.join(output_dir, f"{filename}.stl")
     
-    print(f"💾 Saving to {output_path}...")
+    print(f"💾 Saving STL to {output_path}...")
     track_mesh.save(output_path)
     
-    print(f"✅ Successfully saved {circuit_name}!")
+    print(f"✅ Successfully saved {circuit_name} STL!")
     print(f"   - Vertices: {len(track_mesh.vectors) * 3}")
     print(f"   - Triangles: {len(track_mesh.vectors)}")
+    
+    return True
+
+
+def save_circuit_centerline(telemetry_data: dict, output_dir: str):
+    """
+    Save centerline data as JSON for CatmullRomCurve3 in Three.js.
+    
+    Args:
+        telemetry_data: Dictionary with x, y, z coordinates
+        output_dir: Directory to save the JSON file
+    """
+    if telemetry_data is None:
+        return False
+    
+    circuit_name = telemetry_data['circuit']
+    x = telemetry_data['x']
+    y = telemetry_data['y']
+    z = telemetry_data['z']
+    
+    print(f"📍 Generating centerline data for {circuit_name}...")
+    
+    # Create centerline data as list of [x, y, z] coordinates
+    centerline_data = [
+        [float(x[i]), float(y[i]), float(z[i])] 
+        for i in range(len(x))
+    ]
+    
+    # Save to JSON
+    filename = sanitize_filename(circuit_name)
+    output_path = os.path.join(output_dir, f"{filename}_centerline.json")
+    
+    print(f"💾 Saving centerline to {output_path}...")
+    with open(output_path, 'w') as f:
+        json.dump(centerline_data, f, indent=2)
+    
+    print(f"✅ Successfully saved {circuit_name} centerline!")
+    print(f"   - Points: {len(centerline_data)}")
+    print(f"   - Track length: {telemetry_data['length']:.0f}m")
     
     return True
 
@@ -340,7 +380,12 @@ def main():
             
             if telemetry:
                 # Generate and save STL
-                if save_circuit_stl(telemetry, output_dir):
+                stl_success = save_circuit_stl(telemetry, output_dir)
+                
+                # Generate and save centerline JSON
+                centerline_success = save_circuit_centerline(telemetry, output_dir)
+                
+                if stl_success and centerline_success:
                     successful += 1
                 else:
                     failed += 1
@@ -370,10 +415,13 @@ def main():
             print(f"   - {circuit}")
     
     print(f"\n💡 Next steps:")
-    print(f"   1. Check the generated STL files in: {output_dir}")
+    print(f"   1. Check the generated files in: {output_dir}")
+    print(f"      - *.stl files: 3D circuit meshes for visualization")
+    print(f"      - *_centerline.json files: Racing lines for car movement")
     print(f"   2. Compare with your existing circuits")
     print(f"   3. Add them to your circuitDiscovery.ts file")
-    print(f"   4. These circuits don't have curbstones yet - add them procedurally in Three.js")
+    print(f"   4. Use centerline JSON for CatmullRomCurve3 in Three.js")
+    print(f"   5. These circuits don't have curbstones yet - add them procedurally in Three.js")
     
     print(f"\n{'='*60}\n")
 

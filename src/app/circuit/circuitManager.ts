@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { loadCircuitGeometry, processCircuitGeometry, createCircuitMesh } from './circuitLoader.js';
 import { positionCameraForCircuit } from '../core/camera.js';
-import type { CircuitFile } from './circuitLoader.js';
+import type { CircuitFile } from '../../types';
 
 export class CircuitManager {
   private scene: THREE.Scene;

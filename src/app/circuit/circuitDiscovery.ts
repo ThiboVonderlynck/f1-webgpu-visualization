@@ -1,4 +1,4 @@
-import type { CircuitFile } from './circuitLoader.js';
+import type { CircuitFile } from '../../types';
 
 export const CIRCUIT_FILES: CircuitFile[] = [
   { filename: 'generated/abu-dhabi.stl', format: 'stl', displayName: 'Abu Dhabi GP', rotation: -Math.PI / 2 },
@@ -29,10 +29,6 @@ export const CIRCUIT_FILES: CircuitFile[] = [
 
 export function getAvailableCircuits(): CircuitFile[] {
   return CIRCUIT_FILES;
-}
-
-export function getCircuitByFilename(filename: string): CircuitFile | undefined {
-  return CIRCUIT_FILES.find((c) => c.filename === filename);
 }
 
 export function getDefaultCircuit(): CircuitFile {

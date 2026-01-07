@@ -3,15 +3,9 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { createCurbstoneMaterial } from '../materials/curbstoneMaterial.js';
+import type { CircuitFormat, CircuitFile } from '../../types';
 
-export type CircuitFormat = 'stl' | '3mf';
-
-export interface CircuitFile {
-  filename: string;
-  format: CircuitFormat;
-  displayName: string;
-  rotation?: number;
-}
+export type { CircuitFormat, CircuitFile };
 
 async function loadSTLGeometry(filename: string): Promise<THREE.BufferGeometry> {
   const loader = new STLLoader();

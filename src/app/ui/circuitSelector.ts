@@ -1,11 +1,11 @@
 import { getAvailableCircuits, getDefaultCircuit } from '../circuit/circuitDiscovery.js';
-import type { CircuitFile } from '../circuit/circuitLoader.js';
+import type { CircuitFile } from '../../types';
 
-export function populateCircuitSelector(): void {
+export function setupCircuitSelector(onCircuitChange: (circuitFile: CircuitFile) => void, initialCircuit?: CircuitFile): void {
   const circuitSelect = document.getElementById('circuit-select') as HTMLSelectElement;
-
   if (!circuitSelect) return;
 
+  // Populate circuit selector
   circuitSelect.innerHTML = '';
   const circuits = getAvailableCircuits();
   circuits.forEach((circuit) => {
@@ -14,13 +14,7 @@ export function populateCircuitSelector(): void {
     option.textContent = circuit.displayName;
     circuitSelect.appendChild(option);
   });
-}
 
-export function setupCircuitSelector(onCircuitChange: (circuitFile: CircuitFile) => void, initialCircuit?: CircuitFile): void {
-  const circuitSelect = document.getElementById('circuit-select') as HTMLSelectElement;
-  if (!circuitSelect) return;
-
-  populateCircuitSelector();
   const defaultCircuit = initialCircuit || getDefaultCircuit();
   circuitSelect.value = defaultCircuit.filename;
 

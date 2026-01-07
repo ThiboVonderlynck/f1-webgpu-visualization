@@ -1,12 +1,9 @@
 import { checkWebGPUSupport } from './utils/webgpuCheck.js';
-import { createRenderer } from './app/core/renderer.js';
-import { createScene, addGridHelper } from './app/core/scene.js';
-import { createCamera, createControls, setupCameraResize } from './app/core/camera.js';
-import { addLights } from './app/core/lights.js';
-import { CircuitManager } from './app/circuit/circuitManager.js';
+import { createRenderer, createScene, addGridHelper, createCamera, createControls, setupCameraResize, addLights, startAnimationLoop } from './app/core';
+import { CircuitManager, getDefaultCircuit } from './app/circuit';
+import { CarManager } from './app/cars';
 import { setupCircuitSelector } from './app/ui/circuitSelector.js';
-import { startAnimationLoop } from './app/core/animation.js';
-import { getDefaultCircuit } from './app/circuit/circuitDiscovery.js';
+import GUI from 'lil-gui';
 
 async function init() {
   checkWebGPUSupport();
@@ -27,15 +24,43 @@ async function init() {
 
   addLights(scene);
 
+  // Create GUI
+  const gui = new GUI();
+  gui.title('F1 Circuit Controls');
+
   const circuitManager = new CircuitManager(scene, camera, controls);
+  const carManager = new CarManager(scene, gui);
   const defaultCircuit = getDefaultCircuit();
 
-  setupCircuitSelector((circuitFile) => {
-    circuitManager.loadCircuit(circuitFile).catch(console.error);
+  setupCircuitSelector(async (circuitFile) => {
+    await circuitManager.loadCircuit(circuitFile);
+
+    // Extract circuit name from filename (remove extension and path)
+    const circuitName = circuitFile.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
+
+    // Load racing line for the circuit with same rotation
+    try {
+      await carManager.loadRacingLine(circuitName, circuitFile.rotation);
+    } catch (error) {
+      console.warn(`Racing line not found for ${circuitName}:`, error);
+    }
   }, defaultCircuit);
 
   await circuitManager.loadCircuit(defaultCircuit);
-  startAnimationLoop(renderer, scene, camera, controls);
+
+  // Load racing line for default circuit with same rotation
+  const defaultCircuitName = defaultCircuit.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
+
+  try {
+    await carManager.loadRacingLine(defaultCircuitName, defaultCircuit.rotation);
+  } catch (error) {
+    console.warn(`Racing line not found for ${defaultCircuitName}:`, error);
+  }
+
+  // Start animation loop with car updates
+  startAnimationLoop(renderer, scene, camera, controls, (deltaTime) => {
+    carManager.update(deltaTime);
+  });
 }
 
 // Start the application

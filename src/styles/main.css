@@ -22,6 +22,32 @@ canvas {
   height: 100%;
 }
 
+/* lil-gui styling */
+.lil-gui {
+  --background-color: rgba(0, 0, 0, 0.85);
+  --widget-color: rgba(255, 255, 255, 0.1);
+  --focus-color: #e10600;
+  --hover-color: rgba(255, 255, 255, 0.15);
+  --font-size: 13px;
+  --name-width: 45%;
+  --slider-knob-width: 3px;
+  z-index: 1000;
+}
+
+.lil-gui.root {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lil-gui .title {
+  background: rgba(225, 6, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* Info overlay */
 .info-overlay {
   position: absolute;
@@ -159,4 +185,3 @@ canvas {
     transform: rotate(360deg);
   }
 }
-
