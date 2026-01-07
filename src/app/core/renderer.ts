@@ -6,7 +6,14 @@ export function createRenderer() {
   });
 
   renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  renderer.setPixelRatio(window.devicePixelRatio);
+
+  const app = document.getElementById('app');
+  if (app) {
+    app.appendChild(renderer.domElement);
+  } else {
+    document.body.appendChild(renderer.domElement);
+  }
 
   return renderer;
 }

@@ -1,13 +1,40 @@
 <!doctype html>
 <html lang="en">
+
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>f1-webgpu-visualization</title>
+  <title>F1 WebGPU Visualization</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
+
   <body>
     <div id="app"></div>
+
+  <!-- Info overlay -->
+  <div class="info-overlay">
+    <h2>🏎️ F1 WebGPU Visualization</h2>
+    <label for="circuit-select" style="display: block; margin: 10px 0 5px 0; color: #fff;">
+      <strong>Circuit:</strong>
+    </label>
+    <select id="circuit-select" class="circuit-select">
+      <!-- Options will be populated dynamically -->
+    </select>
+    <p style="margin-top: 10px;"><strong>Renderer:</strong> WebGPU</p>
+  </div>
+
+  <!-- Controls info -->
+  <div class="controls-info">
+    <h3>Controls</h3>
+    <ul>
+      <li><kbd>Left Click + Drag</kbd> Rotate camera</li>
+      <li><kbd>Right Click + Drag</kbd> Pan camera</li>
+      <li><kbd>Scroll</kbd> Zoom in/out</li>
+    </ul>
+  </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
+
 </html>
