@@ -1,7 +1,7 @@
 import { checkWebGPUSupport } from './utils/webgpuCheck.js';
-import { createRenderer, createScene, addGridHelper, createCamera, createControls, setupCameraResize, addLights, startAnimationLoop } from './app/core';
-import { CircuitManager, getDefaultCircuit } from './app/circuit';
-import { CarManager } from './app/cars';
+import { createRenderer, createScene, addGridHelper, createCamera, createControls, setupCameraResize, addLights, startAnimationLoop } from './app/core/index.js';
+import { CircuitManager, getDefaultCircuit } from './app/circuit/index.js';
+import { CarManager } from './app/cars/index.js';
 import { setupCircuitSelector } from './app/ui/circuitSelector.js';
 import { DataFetcher } from './app/ui/DataFetcher.js';
 import GUI from 'lil-gui';
@@ -74,7 +74,7 @@ async function initVisualization(selectedRound?: number) {
   }
 
   // Start animation loop with car updates
-  startAnimationLoop(renderer, scene, camera, controls, (deltaTime) => {
+  startAnimationLoop(renderer, scene, camera, controls, (deltaTime: number) => {
     carManager.update(deltaTime);
   });
 }
