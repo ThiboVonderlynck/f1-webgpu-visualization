@@ -39,6 +39,10 @@ scripts/fastf1_cache/
 *.ff1pkl
 *.sqlite
 
+# Telemetry data (large files)
+public/data/telemetry/**/*.json
+scripts/telemetry/computed_data/**/*.pkl
+
 # Environment variables
 .env
 .env.local
