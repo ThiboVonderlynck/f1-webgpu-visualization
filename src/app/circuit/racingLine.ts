@@ -12,7 +12,7 @@ export class RacingLine {
    */
   async load(circuitName: string, rotation?: number): Promise<void> {
     try {
-      const response = await fetch(`/assets/circuits/generated/${circuitName}_centerline.json`);
+      const response = await fetch(`/data/circuits/generated/${circuitName}_centerline.json`);
 
       if (!response.ok) {
         throw new Error(`Failed to load centerline for ${circuitName}: ${response.statusText}`);

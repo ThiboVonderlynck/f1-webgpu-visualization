@@ -1,40 +1,49 @@
 <!doctype html>
 <html lang="en">
 
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>F1 WebGPU Visualization</title>
   <link rel="stylesheet" href="/src/styles/main.css" />
-  </head>
+</head>
 
-  <body>
-    <div id="app"></div>
+<body>
+  <div id="app"></div>
 
   <!-- Info overlay -->
-  <div class="info-overlay">
-    <h2>🏎️ F1 WebGPU Visualization</h2>
-    <label for="circuit-select" style="display: block; margin: 10px 0 5px 0; color: #fff;">
-      <strong>Circuit:</strong>
+  <div class="absolute top-5 left-5 bg-black/70 px-5 py-4 rounded-lg text-sm backdrop-blur-md border border-white/10 z-[100]">
+    <h2 class="m-0 mb-2.5 text-lg text-[#e10600] font-semibold">🏎️ F1 WebGPU Visualization</h2>
+    <label for="circuit-select" class="block my-2.5 text-white font-bold">
+      Circuit:
     </label>
-    <select id="circuit-select" class="circuit-select">
+    <select id="circuit-select" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded text-white text-sm cursor-pointer transition-all hover:bg-white/15 hover:border-white/30 focus:outline-none focus:border-[#e10600] focus:bg-white/15">
       <!-- Options will be populated dynamically -->
     </select>
-    <p style="margin-top: 10px;"><strong>Renderer:</strong> WebGPU</p>
+    <p class="mt-2.5 mb-1.5 text-neutral-300"><strong class="text-white">Renderer:</strong> WebGPU</p>
   </div>
 
   <!-- Controls info -->
-  <div class="controls-info">
-    <h3>Controls</h3>
-    <ul>
-      <li><kbd>Left Click + Drag</kbd> Rotate camera</li>
-      <li><kbd>Right Click + Drag</kbd> Pan camera</li>
-      <li><kbd>Scroll</kbd> Zoom in/out</li>
+  <div class="absolute bottom-5 right-5 bg-black/70 px-5 py-4 rounded-lg text-xs backdrop-blur-md border border-white/10 z-[100]">
+    <h3 class="m-0 mb-2 text-sm text-[#e10600] font-semibold">Controls</h3>
+    <ul class="list-none m-0 p-0">
+      <li class="my-1 text-neutral-400">
+        <kbd class="inline-block px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs text-white mr-1.5">Left Click + Drag</kbd>
+        Rotate camera
+      </li>
+      <li class="my-1 text-neutral-400">
+        <kbd class="inline-block px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs text-white mr-1.5">Right Click + Drag</kbd>
+        Pan camera
+      </li>
+      <li class="my-1 text-neutral-400">
+        <kbd class="inline-block px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs text-white mr-1.5">Scroll</kbd>
+        Zoom in/out
+      </li>
     </ul>
   </div>
 
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+  <script type="module" src="/src/main.ts"></script>
+</body>
 
 </html>

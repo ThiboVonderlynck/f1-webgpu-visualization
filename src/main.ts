@@ -3,9 +3,11 @@ import { createRenderer, createScene, addGridHelper, createCamera, createControl
 import { CircuitManager, getDefaultCircuit } from './app/circuit';
 import { CarManager } from './app/cars';
 import { setupCircuitSelector } from './app/ui/circuitSelector.js';
+import { DataFetcher } from './app/ui/DataFetcher.js';
 import GUI from 'lil-gui';
+import './styles/dataFetcher.css';
 
-async function init() {
+async function initVisualization(selectedRound?: number) {
   checkWebGPUSupport();
 
   const renderer = createRenderer();
@@ -30,7 +32,21 @@ async function init() {
 
   const circuitManager = new CircuitManager(scene, camera, controls);
   const carManager = new CarManager(scene, gui);
-  const defaultCircuit = getDefaultCircuit();
+
+  // Determine which circuit to load
+  let circuitToLoad = getDefaultCircuit();
+
+  if (selectedRound) {
+    const circuitFilename = DataFetcher.getCircuitForRound(selectedRound);
+    if (circuitFilename) {
+      circuitToLoad = {
+        displayName: circuitFilename.replace('.stl', ''),
+        filename: `generated/${circuitFilename}`,
+        format: 'stl' as const,
+        rotation: 0,
+      };
+    }
+  }
 
   setupCircuitSelector(async (circuitFile) => {
     await circuitManager.loadCircuit(circuitFile);
@@ -44,17 +60,17 @@ async function init() {
     } catch (error) {
       console.warn(`Racing line not found for ${circuitName}:`, error);
     }
-  }, defaultCircuit);
+  }, circuitToLoad);
 
-  await circuitManager.loadCircuit(defaultCircuit);
+  await circuitManager.loadCircuit(circuitToLoad);
 
-  // Load racing line for default circuit with same rotation
-  const defaultCircuitName = defaultCircuit.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
+  // Load racing line for selected circuit with same rotation
+  const circuitName = circuitToLoad.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
 
   try {
-    await carManager.loadRacingLine(defaultCircuitName, defaultCircuit.rotation);
+    await carManager.loadRacingLine(circuitName, circuitToLoad.rotation);
   } catch (error) {
-    console.warn(`Racing line not found for ${defaultCircuitName}:`, error);
+    console.warn(`Racing line not found for ${circuitName}:`, error);
   }
 
   // Start animation loop with car updates
@@ -63,10 +79,22 @@ async function init() {
   });
 }
 
+// Show Data Fetcher first
+function init() {
+  const fetcherContainer = document.createElement('div');
+  document.body.appendChild(fetcherContainer);
+
+  new DataFetcher(fetcherContainer, (year: number, round: number, sessionType: string) => {
+    // Callback: start visualization after data is fetched with the selected round
+    console.log(`Data fetched for ${year} Round ${round} - ${sessionType}`);
+    initVisualization(round).catch((error) => {
+      console.error('Failed to initialize visualization:', error);
+      document.body.innerHTML = `
+        <p>Failed to initialize visualization: ${error.message}</p>
+      `;
+    });
+  });
+}
+
 // Start the application
-init().catch((error) => {
-  console.error('Failed to initialize application:', error);
-  document.body.innerHTML = `
-    <p>Failed to initialize application: ${error.message}</p>
-  `;
-});
+init();

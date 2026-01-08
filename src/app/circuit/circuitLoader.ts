@@ -9,13 +9,13 @@ export type { CircuitFormat, CircuitFile };
 
 async function loadSTLGeometry(filename: string): Promise<THREE.BufferGeometry> {
   const loader = new STLLoader();
-  const geometry = await loader.loadAsync(`/assets/circuits/${filename}`);
+  const geometry = await loader.loadAsync(`/data/circuits/${filename}`);
   return geometry;
 }
 
 async function load3MFGeometry(filename: string): Promise<THREE.BufferGeometry> {
   const loader = new ThreeMFLoader();
-  const object = await loader.loadAsync(`/assets/circuits/${filename}`);
+  const object = await loader.loadAsync(`/data/circuits/${filename}`);
   const geometries: THREE.BufferGeometry[] = [];
 
   object.traverse((child) => {
