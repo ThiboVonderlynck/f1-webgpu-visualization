@@ -5,8 +5,8 @@ import type { CarConfig } from '../../types';
 export class Car {
   public name: string;
   public mesh: THREE.Mesh;
-  public position: number = 0; // 0-1 along the racing line
-  public speed: number = 0.05; // Speed multiplier
+  public position: number = 0;
+  public speed: number = 0.05;
   public isMoving: boolean = false;
   private racingLine: RacingLine | null = null;
   private material: THREE.MeshStandardMaterial;
@@ -27,7 +27,7 @@ export class Car {
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
-    this.mesh.position.y = 2; // Position sphere above the track (radius = 2)
+    this.mesh.position.y = 2;
   }
 
   setRacingLine(racingLine: RacingLine): void {
@@ -40,10 +40,10 @@ export class Car {
       return;
     }
 
-    // Move along the racing line
+    // ...existing code...
     this.position += this.speed * deltaTime;
 
-    // Loop back to start
+    // ...existing code...
     if (this.position >= 1) {
       this.position -= 1;
       this.onLapCompleted?.();
@@ -59,7 +59,7 @@ export class Car {
 
     this.position = Math.max(0, Math.min(1, t));
 
-    // Update mesh position and rotation (sphere sits on track with radius offset)
+    // ...existing code...
     this.racingLine.placeObjectAt(this.mesh, this.position, 2);
   }
 

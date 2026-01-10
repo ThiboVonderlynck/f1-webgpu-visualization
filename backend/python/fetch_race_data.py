@@ -18,51 +18,40 @@ def export_race_data(year, round_number, session_type='R'):
     """
     print(f"Fetching {session_type} data for {year} Round {round_number}...")
     
-    # Enable caching
+    # ...existing code...
     enable_cache()
     
-    # Load session
+    # ...existing code...
     session = load_session(year, round_number, session_type)
     
     event_name = session.event['EventName']
     print(f"Loaded: {event_name}")
     
-    # Get telemetry data
+    # ...existing code...
     telemetry = get_race_telemetry(session, session_type=session_type)
     
-    # Get driver colors
+    # ...existing code...
     colors = get_driver_colors(session)
     
-    # Prepare output directory
-    output_dir = f"../../public/data/telemetry/{year}"
+    # ...existing code...
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    output_dir = os.path.join(project_root, 'public', 'data', 'telemetry', str(year))
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Create output filename
     session_suffix = 'qualifying' if session_type == 'Q' else 'race'
-    output_file = f"{output_dir}/{round_number:02d}-{event_name.lower().replace(' ', '-')}_{session_suffix}.json"
-    
-    # Export data directly (telemetry is already in the right format from f1_data.py)
-    output_data = {
-        "metadata": {
-            "year": year,
-            "round": round_number,
-            "eventName": event_name,
-            "sessionType": session_type,
-            "driverColors": {driver: list(rgb) for driver, rgb in colors.items()},
-        },
-        "telemetry": telemetry
-    }
-    
-    # Write to JSON
-    with open(output_file, 'w') as f:
-        json.dump(output_data, f)
-    
-    print(f"✓ Data exported to: {output_file}")
-    
-    # Print available keys for debugging
+    output_file = os.path.join(output_dir, f"{round_number:02d}-{event_name.lower().replace(' ', '-')}_{session_suffix}.json")
+
+    # ...existing code...
+    print(f"Writing to: {output_file}")
+    try:
+        with open(output_file, 'w') as f:
+            json.dump({"telemetry": {"frames": telemetry["telemetry"]["frames"]}}, f, separators=(',', ':'), ensure_ascii=False)
+        print(f"✓ Data exported successfully")
+    except Exception as e:
+        print(f"✗ Error writing JSON: {e}")
+        raise
+
     if isinstance(telemetry, dict):
         print(f"  Data keys: {', '.join(telemetry.keys())}")
-    
     return output_file
 
 if __name__ == "__main__":

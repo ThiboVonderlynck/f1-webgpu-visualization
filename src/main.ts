@@ -26,14 +26,14 @@ async function initVisualization(selectedRound?: number) {
 
   addLights(scene);
 
-  // Create GUI
+  // ...existing code...
   const gui = new GUI();
   gui.title('F1 Circuit Controls');
 
   const circuitManager = new CircuitManager(scene, camera, controls);
   const carManager = new CarManager(scene, gui);
 
-  // Determine which circuit to load
+  // ...existing code...
   let circuitToLoad = getDefaultCircuit();
 
   if (selectedRound) {

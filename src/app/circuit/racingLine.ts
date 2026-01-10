@@ -20,15 +20,15 @@ export class RacingLine {
 
       const data: number[][] = await response.json();
 
-      // Convert to Vector3 array
+      // ...existing code...
       let points = data.map(([x, y, z]) => new THREE.Vector3(x, y, z));
 
-      // Apply same transformations as STL circuit
+      // ...existing code...
       points = this.applyCircuitTransformations(points, rotation);
 
       this.points = points;
 
-      // Create closed CatmullRom curve (true = closed loop)
+      // ...existing code...
       this.curve = new THREE.CatmullRomCurve3(this.points, true);
       this.circuitName = circuitName;
 
@@ -44,7 +44,7 @@ export class RacingLine {
    * Matches the logic from circuitLoader.ts processCircuitGeometry and createCircuitMesh.
    */
   private applyCircuitTransformations(points: THREE.Vector3[], rotation?: number): THREE.Vector3[] {
-    // Calculate bounding box
+    // ...existing code...
     const box = new THREE.Box3().setFromPoints(points);
     const center = new THREE.Vector3();
     box.getCenter(center);
@@ -53,30 +53,30 @@ export class RacingLine {
     box.getSize(size);
     const maxDimension = Math.max(size.x, size.y, size.z);
 
-    // Calculate scale factor (same as STL)
+    // ...existing code...
     const TARGET_SIZE = 200;
     const scaleFactor = maxDimension > TARGET_SIZE ? TARGET_SIZE / maxDimension : 1;
 
-    // Apply transformations
+    // ...existing code...
     let transformedPoints = points.map((point) => {
-      // 1. Center (translate to origin)
+      // ...existing code...
       const centered = point.clone().sub(center);
 
-      // 2. Scale
+      // ...existing code...
       const scaled = centered.multiplyScalar(scaleFactor);
 
       return scaled;
     });
 
-    // 3. Rotate to match circuit mesh orientation
-    // Circuit mesh gets: rotation.x = -Math.PI / 2 (flip to horizontal)
-    // Then optional custom rotation.z
+    // ...existing code...
+    // ...existing code...
+    // ...existing code...
     const rotationMatrix = new THREE.Matrix4();
 
-    // First rotation: flip from vertical to horizontal (same as circuit)
+    // ...existing code...
     rotationMatrix.makeRotationX(-Math.PI / 2);
 
-    // Apply custom rotation if provided
+    // ...existing code...
     if (rotation !== undefined) {
       const customRotation = new THREE.Matrix4().makeRotationZ(rotation);
       rotationMatrix.multiply(customRotation);
@@ -172,7 +172,7 @@ export class RacingLine {
       throw new Error('Racing line not loaded. Call load() first.');
     }
 
-    // Get more points for a smoother debug visualization
+    // ...existing code...
     const points = this.curve.getPoints(this.points.length * 2);
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
@@ -181,7 +181,7 @@ export class RacingLine {
     });
 
     const line = new THREE.Line(geometry, material);
-    line.position.y += 0.2; // Slightly above track to be visible
+    line.position.y += 0.2;
 
     return line;
   }
