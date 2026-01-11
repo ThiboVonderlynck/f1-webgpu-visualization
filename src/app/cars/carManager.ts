@@ -18,7 +18,6 @@ export class CarManager {
   }
 
   private createDefaultCars(): void {
-    // Team colors
     const teamColors = [
       0xe10600, // Red Bull Racing
       0x00a19c, // Mercedes
@@ -67,29 +66,22 @@ export class CarManager {
       car.moveTo(0);
     });
 
-    // Create UI for cars
     this.createUI();
 
     console.log(`✓ Cars loaded on racing line: ${circuitName}`);
   }
 
-  /**
-   * Create UI controls for cars.
-   */
   private createUI(): void {
-    // Remove existing car folders
     this.carFolders.forEach((folder) => folder.destroy());
     this.carFolders.clear();
     if (this.sceneFolderRef) {
       this.sceneFolderRef.destroy();
     }
 
-    // Create folder for each car
     this.cars.forEach((car) => {
       const folder = this.gui.addFolder(car.name);
       this.carFolders.set(car.name, folder);
 
-      // Move checkbox
       folder
         .add({ move: car.isMoving }, 'move')
         .name('Move')
@@ -101,7 +93,6 @@ export class CarManager {
           }
         });
 
-      // Color picker
       const material = car.mesh.material as THREE.MeshStandardMaterial;
       folder
         .addColor({ color: material.color.getHex() }, 'color')
@@ -110,7 +101,6 @@ export class CarManager {
           car.setColor(value);
         });
 
-      // Position slider
       folder
         .add(car, 'position', 0, 1, 0.001)
         .name('Position')
@@ -122,14 +112,11 @@ export class CarManager {
       folder.close();
     });
 
-    // Scene controls
     const sceneFolder = this.gui.addFolder('Scene');
     this.sceneFolderRef = sceneFolder;
 
-    // Race button
     sceneFolder.add({ race: () => this.startRace() }, 'race').name('Start Race 🏁');
 
-    // Debug racing line toggle
     let debugLine: THREE.Line | null = null;
     sceneFolder
       .add({ debug: false }, 'debug')
@@ -149,9 +136,6 @@ export class CarManager {
     sceneFolder.open();
   }
 
-  /**
-   * Start a race between all cars.
-   */
   private startRace(): void {
     let finished = 0;
     const totalCars = this.cars.length;
@@ -162,7 +146,6 @@ export class CarManager {
 
       if (finished === totalCars) {
         console.log('🏆 Race completed!');
-        // Re-enable controls after race
         setTimeout(() => {
           this.cars.forEach((car) => {
             car.stop();
@@ -175,7 +158,6 @@ export class CarManager {
       }
     };
 
-    // Disable manual controls during race
     this.carFolders.forEach((folder) => {
       folder.controllersRecursive().forEach((c) => c.disable());
     });
@@ -186,16 +168,10 @@ export class CarManager {
     });
   }
 
-  /**
-   * Update all cars.
-   */
   update(deltaTime: number): void {
     this.cars.forEach((car) => car.update(deltaTime));
   }
 
-  /**
-   * Add a new car.
-   */
   addCar(config: { name: string; color: number; speed?: number }): Car {
     const car = new Car(config);
 
@@ -206,7 +182,6 @@ export class CarManager {
     this.cars.push(car);
     this.scene.add(car.getMesh());
 
-    // Recreate UI to include new car
     if (this.racingLine) {
       this.createUI();
     }
@@ -214,9 +189,6 @@ export class CarManager {
     return car;
   }
 
-  /**
-   * Remove a car.
-   */
   removeCar(car: Car): void {
     const index = this.cars.indexOf(car);
     if (index !== -1) {
@@ -224,23 +196,16 @@ export class CarManager {
       this.scene.remove(car.getMesh());
       car.dispose();
 
-      // Recreate UI
       if (this.racingLine) {
         this.createUI();
       }
     }
   }
 
-  /**
-   * Get all cars.
-   */
   getCars(): Car[] {
     return this.cars;
   }
 
-  /**
-   * Dispose of all resources.
-   */
   dispose(): void {
     this.cars.forEach((car) => {
       this.scene.remove(car.getMesh());

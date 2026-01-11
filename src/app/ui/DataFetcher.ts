@@ -1,47 +1,9 @@
-interface Race {
-  round: number;
-  name: string;
-}
-
-interface FetchResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-const API_URL = 'http://localhost:3001/api';
-
-// Map race round numbers to circuit filenames
-const RACE_TO_CIRCUIT: { [key: number]: string } = {
-  1: 'bahrain.stl',
-  2: 'saudi.stl',
-  3: 'australia.stl',
-  4: 'japon.stl',
-  5: 'chinesse.stl',
-  6: 'miami.stl',
-  7: 'romagna.stl',
-  8: 'monaco.stl',
-  9: 'canadian.stl',
-  10: 'spanish.stl',
-  11: 'austrian.stl',
-  12: 'british.stl',
-  13: 'hungarian.stl',
-  14: 'belgique.stl',
-  15: 'dutch.stl',
-  16: 'italian.stl',
-  17: 'azerbaijan.stl',
-  18: 'singapour.stl',
-  19: 'usa.stl',
-  20: 'mexique.stl',
-  21: 'brazilian.stl',
-  22: 'usa-lv.stl',
-  23: 'quatar.stl',
-  24: 'abu-dhabi.stl',
-};
+import { getCircuitForRound } from '../../config/index.js';
+import { fetchRaces, fetchTelemetryData } from '../services/dataService.js';
 
 export class DataFetcher {
   private container: HTMLElement;
-  private races: Race[] = [];
+  private races: Array<{ round: number; name: string }> = [];
   private onDataFetched?: (year: number, round: number, sessionType: string) => void;
 
   constructor(container: HTMLElement, onDataFetched?: (year: number, round: number, sessionType: string) => void) {
@@ -57,9 +19,7 @@ export class DataFetcher {
 
   private async loadRaces() {
     try {
-      const response = await fetch(`${API_URL}/races`);
-      const data = await response.json();
-      this.races = data.races;
+      this.races = await fetchRaces(2024);
     } catch (error) {
       console.error('Failed to load races:', error);
     }
@@ -146,10 +106,8 @@ export class DataFetcher {
     button.innerHTML = '<span class="loading-spinner"></span>Fetching...';
     messageContainer.innerHTML = '';
 
-    // Show progress bar
     progressContainer.classList.add('active');
 
-    // Simulate progress
     let progress = 0;
     const progressInterval = setInterval(() => {
       progress += Math.random() * 15;
@@ -159,13 +117,7 @@ export class DataFetcher {
     }, 300);
 
     try {
-      const response = await fetch(`${API_URL}/fetch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, round, sessionType }),
-      });
-
-      const data: FetchResponse = await response.json();
+      const data = await fetchTelemetryData(year, round, sessionType);
 
       clearInterval(progressInterval);
       progressBar.style.width = '100%';
@@ -175,10 +127,8 @@ export class DataFetcher {
         progressStatus.textContent = 'Complete!';
         messageContainer.innerHTML = `<div class="message success">✓ ${data.message}<br><br>🚀 Starting visualization...</div>`;
 
-        // Hide the fetcher after successful fetch
         setTimeout(() => {
           this.container.style.display = 'none';
-          // Call callback to start the visualization with race info
           if (this.onDataFetched) {
             this.onDataFetched(year, round, sessionType);
           }
@@ -197,7 +147,6 @@ export class DataFetcher {
       button.disabled = false;
       button.textContent = 'Fetch Data';
 
-      // Hide progress bar after a delay if there was an error
       if (!messageContainer.querySelector('.success')) {
         setTimeout(() => {
           progressContainer.classList.remove('active');
@@ -206,8 +155,7 @@ export class DataFetcher {
     }
   }
 
-  // Get circuit filename for a given round
   static getCircuitForRound(round: number): string | null {
-    return RACE_TO_CIRCUIT[round] || null;
+    return getCircuitForRound(round);
   }
 }

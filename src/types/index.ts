@@ -1,4 +1,3 @@
-// ...existing code...
 export type CircuitFormat = 'stl' | '3mf';
 
 export interface CircuitFile {
@@ -8,7 +7,6 @@ export interface CircuitFile {
   rotation?: number;
 }
 
-// ...existing code...
 export interface CarConfig {
   name: string;
   color: number;
@@ -16,5 +14,4 @@ export interface CarConfig {
   startPosition?: number;
 }
 
-// ...existing code...
 export type UpdateCallback = (deltaTime: number) => void;

@@ -20,15 +20,10 @@ export class RacingLine {
 
       const data: number[][] = await response.json();
 
-      // ...existing code...
       let points = data.map(([x, y, z]) => new THREE.Vector3(x, y, z));
-
-      // ...existing code...
       points = this.applyCircuitTransformations(points, rotation);
 
       this.points = points;
-
-      // ...existing code...
       this.curve = new THREE.CatmullRomCurve3(this.points, true);
       this.circuitName = circuitName;
 
@@ -39,12 +34,7 @@ export class RacingLine {
     }
   }
 
-  /**
-   * Apply same transformations as circuit STL: center, scale, and rotate.
-   * Matches the logic from circuitLoader.ts processCircuitGeometry and createCircuitMesh.
-   */
   private applyCircuitTransformations(points: THREE.Vector3[], rotation?: number): THREE.Vector3[] {
-    // ...existing code...
     const box = new THREE.Box3().setFromPoints(points);
     const center = new THREE.Vector3();
     box.getCenter(center);
@@ -53,30 +43,17 @@ export class RacingLine {
     box.getSize(size);
     const maxDimension = Math.max(size.x, size.y, size.z);
 
-    // ...existing code...
     const TARGET_SIZE = 200;
     const scaleFactor = maxDimension > TARGET_SIZE ? TARGET_SIZE / maxDimension : 1;
 
-    // ...existing code...
     let transformedPoints = points.map((point) => {
-      // ...existing code...
       const centered = point.clone().sub(center);
-
-      // ...existing code...
       const scaled = centered.multiplyScalar(scaleFactor);
-
       return scaled;
     });
 
-    // ...existing code...
-    // ...existing code...
-    // ...existing code...
     const rotationMatrix = new THREE.Matrix4();
-
-    // ...existing code...
     rotationMatrix.makeRotationX(-Math.PI / 2);
-
-    // ...existing code...
     if (rotation !== undefined) {
       const customRotation = new THREE.Matrix4().makeRotationZ(rotation);
       rotationMatrix.multiply(customRotation);
@@ -172,7 +149,6 @@ export class RacingLine {
       throw new Error('Racing line not loaded. Call load() first.');
     }
 
-    // ...existing code...
     const points = this.curve.getPoints(this.points.length * 2);
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({

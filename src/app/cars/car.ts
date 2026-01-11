@@ -40,10 +40,8 @@ export class Car {
       return;
     }
 
-    // ...existing code...
     this.position += this.speed * deltaTime;
 
-    // ...existing code...
     if (this.position >= 1) {
       this.position -= 1;
       this.onLapCompleted?.();
@@ -58,8 +56,6 @@ export class Car {
     }
 
     this.position = Math.max(0, Math.min(1, t));
-
-    // ...existing code...
     this.racingLine.placeObjectAt(this.mesh, this.position, 2);
   }
 
@@ -76,9 +72,6 @@ export class Car {
     this.isMoving = false;
   }
 
-  /**
-   * Reset the car to starting position.
-   */
   reset(): void {
     this.position = 0;
     this.isMoving = false;
@@ -102,16 +95,10 @@ export class Car {
     this.start();
   }
 
-  /**
-   * Get the mesh to add to the scene.
-   */
   getMesh(): THREE.Mesh {
     return this.mesh;
   }
 
-  /**
-   * Dispose of the car's resources.
-   */
   dispose(): void {
     this.mesh.geometry.dispose();
     this.material.dispose();

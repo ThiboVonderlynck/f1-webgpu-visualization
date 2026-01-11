@@ -1,49 +1,521 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>F1 WebGPU Visualization</title>
-  <link rel="stylesheet" href="/src/styles/main.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F1 Data Selection Screen</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.5s ease-in-out forwards;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in-delayed {
+      animation: fadeInDelayed 0.5s ease-in-out forwards;
+      opacity: 0;
+    }
+
+    @keyframes fadeInDelayed {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .scale-on-hover {
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .scale-on-hover:hover {
+      transform: scale(1.03);
+    }
+
+    .scale-on-hover:active {
+      transform: scale(0.97);
+    }
+
+    .race-card:hover {
+      transform: scale(1.02);
+    }
+
+    .race-card:active {
+      transform: scale(0.98);
+    }
+
+    .button-enabled:hover {
+      transform: scale(1.02);
+      box-shadow: 0 20px 25px -5px rgb(220 38 38 / 0.3), 0 8px 10px -6px rgb(220 38 38 / 0.3);
+    }
+
+    .button-enabled:active {
+      transform: scale(0.98);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(39, 39, 42, 0.3);
+      border-radius: 10px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(113, 113, 122, 0.5);
+      border-radius: 10px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(113, 113, 122, 0.7);
+    }
+
+    .selected-year {
+      background: rgb(220, 38, 38);
+      color: white;
+      box-shadow: 0 4px 6px -1px rgb(220 38 38 / 0.5), 0 2px 4px -2px rgb(220 38 38 / 0.5);
+      border: 2px solid rgb(239, 68, 68);
+    }
+
+    .selected-race {
+      background: rgb(220, 38, 38);
+      border: 2px solid rgb(239, 68, 68);
+      box-shadow: 0 4px 6px -1px rgb(220 38 38 / 0.3), 0 2px 4px -2px rgb(220 38 38 / 0.3);
+    }
+
+    .selected-session {
+      background: rgb(220, 38, 38);
+      color: white;
+      box-shadow: 0 4px 6px -1px rgb(220 38 38 / 0.5), 0 2px 4px -2px rgb(220 38 38 / 0.5);
+      border: 2px solid rgb(239, 68, 68);
+    }
+
+    .card-item {
+      animation: fadeInUp 0.3s ease forwards;
+      opacity: 0;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    #sessionContainer {
+      transition: opacity 0.2s ease;
+    }
+  </style>
 </head>
 
-<body>
-  <div id="app"></div>
+<body class="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 flex items-center justify-center p-3 sm:p-4">
+  <div class="w-full max-w-7xl h-[96vh] flex flex-col fade-in">
+    <!-- Main Card -->
+    <div class="bg-zinc-900/50 backdrop-blur-xl rounded-2xl border border-zinc-800/50 shadow-2xl overflow-hidden flex flex-col h-full">
+      <!-- Header Section -->
+      <div class="bg-gradient-to-r from-zinc-900 to-zinc-800/50 border-b border-zinc-800/50 px-5 sm:px-6 py-4">
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">
+            Load Formula 1 Data
+          </h1>
+          <p class="text-zinc-400 text-sm">
+            Choose a season, race, and session to explore detailed F1 insights.
+          </p>
+        </div>
+      </div>
 
-  <!-- Info overlay -->
-  <div class="absolute top-5 left-5 bg-black/70 px-5 py-4 rounded-lg text-sm backdrop-blur-md border border-white/10 z-[100]">
-    <h2 class="m-0 mb-2.5 text-lg text-[#e10600] font-semibold">🏎️ F1 WebGPU Visualization</h2>
-    <label for="circuit-select" class="block my-2.5 text-white font-bold">
-      Circuit:
-    </label>
-    <select id="circuit-select" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded text-white text-sm cursor-pointer transition-all hover:bg-white/15 hover:border-white/30 focus:outline-none focus:border-[#e10600] focus:bg-white/15">
-      <!-- Options will be populated dynamically -->
-    </select>
-    <p class="mt-2.5 mb-1.5 text-neutral-300"><strong class="text-white">Renderer:</strong> WebGPU</p>
+      <!-- Content Section -->
+      <div class="px-5 sm:px-6 py-4 space-y-4 flex-1 overflow-hidden flex flex-col">
+        <!-- Year Selection -->
+        <div class="fade-in-delayed" style="animation-delay: 0.3s;">
+          <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-red-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+              <line x1="16" x2="16" y1="2" y2="6" />
+              <line x1="8" x2="8" y1="2" y2="6" />
+              <line x1="3" x2="21" y1="10" y2="10" />
+            </svg>
+            <h2 class="text-base font-semibold text-white">Season</h2>
+          </div>
+          <div id="yearContainer" class="flex flex-wrap gap-1.5">
+            <!-- Year buttons will be inserted here -->
+          </div>
+        </div>
+
+        <!-- Race Selection -->
+        <div class="fade-in-delayed flex-1 overflow-hidden flex flex-col" style="animation-delay: 0.4s;">
+          <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-red-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+              <line x1="4" x2="4" y1="22" y2="15" />
+            </svg>
+            <h2 class="text-base font-semibold text-white">Grand Prix</h2>
+          </div>
+          <div id="raceContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 overflow-y-auto pr-1.5 custom-scrollbar">
+            <!-- Race buttons will be inserted here -->
+          </div>
+        </div>
+
+        <!-- Session Type Selection -->
+        <div class="fade-in-delayed" style="animation-delay: 0.5s;">
+          <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-red-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+              <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+              <path d="M4 22h16" />
+              <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+              <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+              <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+            </svg>
+            <h2 class="text-base font-semibold text-white">Session Type</h2>
+          </div>
+          <div id="sessionContainer" class="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 min-h-[60px] transition-all duration-300">
+            <!-- Session buttons will be inserted here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer / CTA -->
+      <div class="bg-gradient-to-r from-zinc-900 to-zinc-800/50 border-t border-zinc-800/50 px-5 sm:px-6 py-3 space-y-3">
+        <div id="statusInfo" class="text-sm text-zinc-400 min-h-[20px] hidden">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            <div id="statusText" class="font-mono text-xs"></div>
+          </div>
+        </div>
+        <button id="loadButton" disabled class="w-full py-3 rounded-xl font-bold text-base transition-all duration-300 bg-zinc-800/30 text-zinc-600 cursor-not-allowed border-2 border-zinc-800/50">
+          Select All Options to Continue
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer Note -->
+    <div class="text-center mt-2 text-zinc-500 text-xs fade-in-delayed" style="animation-delay: 0.8s;">
+      Premium F1 Analytics Platform
+    </div>
   </div>
 
-  <!-- Controls info -->
-  <div class="absolute bottom-5 right-5 bg-black/70 px-5 py-4 rounded-lg text-xs backdrop-blur-md border border-white/10 z-[100]">
-    <h3 class="m-0 mb-2 text-sm text-[#e10600] font-semibold">Controls</h3>
-    <ul class="list-none m-0 p-0">
-      <li class="my-1 text-neutral-400">
-        <kbd class="inline-block px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs text-white mr-1.5">Left Click + Drag</kbd>
-        Rotate camera
-      </li>
-      <li class="my-1 text-neutral-400">
-        <kbd class="inline-block px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs text-white mr-1.5">Right Click + Drag</kbd>
-        Pan camera
-      </li>
-      <li class="my-1 text-neutral-400">
-        <kbd class="inline-block px-1.5 py-0.5 bg-white/10 rounded font-mono text-xs text-white mr-1.5">Scroll</kbd>
-        Zoom in/out
-      </li>
-    </ul>
-  </div>
+  <script type="module">
+    import {
+      fetchYears,
+      fetchRaces,
+      fetchSessions,
+      checkTelemetryExists,
+      fetchTelemetryData,
+      loadTelemetryFile,
+      API_CONFIG
+    } from '/src/app/services/dataService.js';
 
-  <script type="module" src="/src/main.ts"></script>
+    const sessionIcons = {
+      'R': '<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
+      'Q': '<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>',
+      'S': '<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+      'SQ': '<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>'
+    };
+
+    let selectedYear = null;
+    let selectedRace = null;
+    let selectedSession = null;
+    let availableRaces = [];
+    let availableSessions = [];
+
+    const BTN_CLASSES = {
+      year: 'px-4 py-2 rounded-lg font-bold text-sm transition-all duration-200 bg-zinc-800/50 text-zinc-300 border-2 border-zinc-700/50 hover:border-zinc-600 hover:bg-zinc-800 scale-on-hover card-item',
+      yearSelected: 'px-4 py-2 rounded-lg font-bold text-sm transition-all duration-200 selected-year scale-on-hover card-item',
+      race: 'px-3 py-2 rounded-lg text-left transition-all duration-200 bg-zinc-800/40 border-2 border-zinc-700/50 hover:border-zinc-600 hover:bg-zinc-800/60 race-card card-item relative',
+      raceSelected: 'px-3 py-2 rounded-lg text-left transition-all duration-200 selected-race race-card card-item relative',
+      session: 'flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs transition-all duration-200 bg-zinc-800/50 text-zinc-300 border-2 border-zinc-700/50 hover:border-zinc-600 hover:bg-zinc-800 scale-on-hover card-item',
+      sessionSelected: 'flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs transition-all duration-200 selected-session scale-on-hover card-item',
+    };
+
+    const getRace = () => availableRaces.find(r => r.round === selectedRace);
+    const getSession = () => availableSessions.find(s => s.code === selectedSession);
+    const deselectButtons = (container, defaultClass) => {
+      document.querySelectorAll(`${container} button`).forEach(btn => btn.className = defaultClass);
+    };
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function init() {
+      try {
+        const years = await fetchYears();
+        renderYears(years);
+      } catch (error) {
+        console.error('Error loading years:', error);
+        document.getElementById('yearContainer').innerHTML = '<div class="text-red-500 text-sm p-4">Failed to connect to API server. Make sure the Python API server is running on port 3002.</div>';
+      }
+    }
+
+
+    function renderYears(years) {
+      const yearContainer = document.getElementById('yearContainer');
+      yearContainer.innerHTML = '';
+      years.sort((a, b) => b - a).forEach((year, index) => {
+        const button = document.createElement('button');
+        button.className = BTN_CLASSES.year;
+        button.style.animationDelay = `${0.1 + index * 0.05}s`;
+        button.textContent = year;
+        button.onclick = () => selectYear(year, button);
+        yearContainer.appendChild(button);
+      });
+    }
+
+    async function selectYear(year, button) {
+      deselectButtons('#yearContainer', BTN_CLASSES.year);
+      button.className = BTN_CLASSES.yearSelected;
+      selectedYear = year;
+      selectedRace = null;
+      selectedSession = null;
+      updateStatusInfo('', false);
+
+      document.getElementById('raceContainer').innerHTML = '<div class="text-zinc-500 text-sm p-4">Loading races...</div>';
+      const sessionContainer = document.getElementById('sessionContainer');
+      sessionContainer.innerHTML = '';
+      sessionContainer.style.opacity = '0.5';
+
+      try {
+        availableRaces = await fetchRaces(year);
+        renderRaces(availableRaces);
+      } catch (error) {
+        console.error('Error loading races:', error);
+        document.getElementById('raceContainer').innerHTML = '<div class="text-red-500 text-sm p-4">Error loading races</div>';
+      }
+      updateLoadButton();
+    }
+
+    async function checkRaceDataExists(year, round) {
+      try {
+        const data = await (await fetch(`${API_CONFIG.NODE_SERVER.baseUrl}/api/check/${year}/${round}/R`)).json();
+        return data.exists || false;
+      } catch {
+        return false;
+      }
+    }
+
+    async function renderRaces(races) {
+      const raceContainer = document.getElementById('raceContainer');
+      raceContainer.innerHTML = '<div class="text-zinc-500 text-sm p-4 col-span-full">Loading races...</div>';
+
+      const raceChecks = await Promise.all(races.map(async (race) => ({
+        ...race,
+        hasData: await checkRaceDataExists(selectedYear, race.round),
+      })));
+
+      raceContainer.innerHTML = '';
+      raceChecks.forEach((race, index) => {
+        const button = document.createElement('button');
+        button.className = BTN_CLASSES.race;
+        button.style.animationDelay = `${0.2 + index * 0.02}s`;
+        button.setAttribute('data-round', race.round);
+        button.innerHTML = `${race.hasData ? '<div class="absolute top-1 right-1 bg-green-600/80 rounded-full p-0.5" title="Data already available"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div>' : ''}<div class="font-semibold text-white text-xs mb-0.5 flex items-center gap-1">${race.name}${race.hasData ? '<span class="text-green-400 text-[10px]">(cached)</span>' : ''}</div><div class="text-xs ${race.hasData ? 'text-zinc-300' : 'text-zinc-400'}">${race.country} • ${race.date}</div>`;
+        button.onclick = () => selectRace(race.round, button);
+        raceContainer.appendChild(button);
+      });
+    }
+
+    async function selectRace(round, button) {
+      deselectButtons('#raceContainer', BTN_CLASSES.race);
+      document.querySelectorAll('#raceContainer button').forEach(btn => {
+        const btnRace = availableRaces.find(r => r.round === parseInt(btn.getAttribute('data-round')));
+        const locationDiv = btn.querySelector('div:last-child');
+        if (locationDiv) locationDiv.className = btnRace?.hasData ? 'text-xs text-zinc-300' : 'text-xs text-zinc-400';
+      });
+      button.className = BTN_CLASSES.raceSelected;
+      const locationDiv = button.querySelector('div:last-child');
+      if (locationDiv) locationDiv.className = 'text-xs text-red-100';
+
+      selectedRace = round;
+      selectedSession = null;
+      updateStatusInfo('', false);
+
+      const sessionContainer = document.getElementById('sessionContainer');
+      sessionContainer.style.opacity = '0.6';
+      sessionContainer.innerHTML = '<div class="col-span-2 sm:col-span-1 text-zinc-500 text-sm py-2 px-4 flex items-center justify-center min-h-[40px]">Loading sessions...</div>';
+
+      try {
+        availableSessions = await fetchSessions(selectedYear, round);
+        renderSessions(availableSessions);
+      } catch (error) {
+        console.error('Error loading sessions:', error);
+        sessionContainer.style.opacity = '1';
+        sessionContainer.innerHTML = '<div class="col-span-2 sm:col-span-1 text-red-500 text-sm py-2 px-4 flex items-center justify-center min-h-[40px]">Error loading sessions</div>';
+      }
+      updateLoadButton();
+    }
+
+    function renderSessions(sessions) {
+      const sessionContainer = document.getElementById('sessionContainer');
+      sessionContainer.innerHTML = '';
+      sessions.forEach((session, index) => {
+        const button = document.createElement('button');
+        button.className = BTN_CLASSES.session;
+        button.style.animationDelay = `${0.3 + index * 0.05}s`;
+        button.innerHTML = `${sessionIcons[session.code] || ''}<span>${session.name}</span>`;
+        button.onclick = () => selectSession(session.code, button);
+        sessionContainer.appendChild(button);
+      });
+      sessionContainer.style.opacity = '1';
+    }
+
+    function selectSession(sessionCode, button) {
+      deselectButtons('#sessionContainer', BTN_CLASSES.session);
+      button.className = BTN_CLASSES.sessionSelected;
+      selectedSession = sessionCode;
+      updateLoadButton();
+    }
+
+    function updateStatusInfo(text, show = true, cliLogs = []) {
+      const statusInfo = document.getElementById('statusInfo');
+      const statusText = document.getElementById('statusText');
+      if (!statusInfo || !statusText) return;
+
+      if (cliLogs.length > 0) {
+        statusText.textContent = cliLogs[cliLogs.length - 1].message;
+      } else {
+        statusText.textContent = text;
+      }
+      statusInfo.classList.toggle('hidden', !show);
+    }
+
+    function updateLoadButton() {
+      const loadButton = document.getElementById('loadButton');
+      const isReady = selectedYear && selectedRace && selectedSession;
+      const race = getRace();
+      const session = getSession();
+
+      loadButton.disabled = !isReady;
+      loadButton.className = isReady
+        ? 'w-full py-3 rounded-xl font-bold text-base transition-all duration-300 bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-600/50 cursor-pointer button-enabled'
+        : 'w-full py-3 rounded-xl font-bold text-base transition-all duration-300 bg-zinc-800/30 text-zinc-600 cursor-not-allowed border-2 border-zinc-800/50';
+      loadButton.textContent = isReady ? 'Load Data' : 'Select All Options to Continue';
+      loadButton.onclick = isReady ? handleLoadData : null;
+      updateStatusInfo(isReady ? `Ready to load: ${selectedYear} ${race?.name || `Round ${selectedRace}`} - ${session?.name || selectedSession}` : '', isReady);
+    }
+
+    async function handleLoadData() {
+      const loadButton = document.getElementById('loadButton');
+      const race = getRace();
+      const session = getSession();
+      const raceName = race?.name || `Round ${selectedRace}`;
+
+      loadButton.disabled = true;
+      loadButton.textContent = 'Loading...';
+      loadButton.className = 'w-full py-3 rounded-xl font-bold text-base transition-all duration-300 bg-zinc-700 text-zinc-400 cursor-not-allowed';
+
+      try {
+        const exists = await checkTelemetryExists(selectedYear, selectedRace, selectedSession);
+
+        if (!exists) {
+          const fetchData = await fetchTelemetryData(selectedYear, selectedRace, selectedSession);
+          if (!fetchData.success) {
+            throw new Error(fetchData.error || 'Failed to fetch data');
+          }
+        }
+
+        const loadData = await loadTelemetryFile(selectedYear, selectedRace, selectedSession);
+
+        if (!loadData.success) {
+          throw new Error(loadData.error || 'Failed to load telemetry');
+        }
+
+        let loadingComplete = false;
+        let lastLogCount = 0;
+        const maxWaitTime = 60000;
+        const startTime = Date.now();
+
+        while (!loadingComplete && (Date.now() - startTime) < maxWaitTime) {
+          await sleep(500);
+
+          try {
+            const response = await fetch(`${API_CONFIG.NODE_SERVER.baseUrl}/api/load/progress`);
+            const progress = await response.json();
+
+            if (progress.logs?.length > lastLogCount) {
+              lastLogCount = progress.logs.length;
+            }
+
+            if (!progress.loading) {
+              loadingComplete = true;
+            }
+
+            if (progress.logs?.length > 0) {
+              updateStatusInfo('', true, progress.logs);
+            }
+          } catch (error) {
+            console.error('Error checking load status:', error);
+          }
+        }
+
+        if (!loadingComplete) {
+          console.warn('Loading timeout, continuing anyway...');
+        }
+
+        await sleep(300);
+        sessionStorage.setItem('f1Selection', JSON.stringify({ year: selectedYear, round: selectedRace, sessionType: selectedSession, raceName }));
+        document.querySelector('.w-full.max-w-7xl').style.display = 'none';
+        await sleep(200);
+
+        import('/src/main.js').then(() => {
+          console.log('✓ Visualization loaded successfully');
+        }).catch((error) => {
+          console.error('Failed to load visualization:', error);
+          document.querySelector('.w-full.max-w-7xl').style.display = 'flex';
+          loadButton.disabled = false;
+          loadButton.textContent = 'Load Data';
+          loadButton.className = 'w-full py-3 rounded-xl font-bold text-base transition-all duration-300 bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-600/50 cursor-pointer button-enabled';
+          updateStatusInfo(`✗ Failed to load visualization: ${error.message}`, true);
+          alert(`Failed to load visualization: ${error.message}`);
+        });
+
+      } catch (error) {
+        console.error('Error loading data:', error);
+        loadButton.disabled = false;
+        loadButton.textContent = 'Load Data';
+        loadButton.className = 'w-full py-3 rounded-xl font-bold text-base transition-all duration-300 bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-600/50 cursor-pointer button-enabled';
+        updateStatusInfo(`✗ Error: ${error.message}`, true);
+        alert(`Error: ${error.message}\n\nMake sure:\n- Node.js server is running on port 3001\n- Python API server is running on port 3002`);
+      }
+    }
+
+    init();
+  </script>
 </body>
 
 </html>

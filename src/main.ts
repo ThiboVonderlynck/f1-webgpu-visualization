@@ -2,8 +2,9 @@ import { checkWebGPUSupport } from './utils/webgpuCheck.js';
 import { createRenderer, createScene, addGridHelper, createCamera, createControls, setupCameraResize, addLights, startAnimationLoop } from './app/core/index.js';
 import { CircuitManager, getDefaultCircuit } from './app/circuit/index.js';
 import { CarManager } from './app/cars/index.js';
-import { setupCircuitSelector } from './app/ui/circuitSelector.js';
+import { setupCircuitSelector } from './app/ui/CircuitSelector.js';
 import { DataFetcher } from './app/ui/DataFetcher.js';
+import { getCircuitForRound } from './config/index.js';
 import GUI from 'lil-gui';
 import './styles/dataFetcher.css';
 
@@ -26,18 +27,16 @@ async function initVisualization(selectedRound?: number) {
 
   addLights(scene);
 
-  // ...existing code...
   const gui = new GUI();
   gui.title('F1 Circuit Controls');
 
   const circuitManager = new CircuitManager(scene, camera, controls);
   const carManager = new CarManager(scene, gui);
 
-  // ...existing code...
   let circuitToLoad = getDefaultCircuit();
 
   if (selectedRound) {
-    const circuitFilename = DataFetcher.getCircuitForRound(selectedRound);
+    const circuitFilename = getCircuitForRound(selectedRound);
     if (circuitFilename) {
       circuitToLoad = {
         displayName: circuitFilename.replace('.stl', ''),
@@ -51,10 +50,8 @@ async function initVisualization(selectedRound?: number) {
   setupCircuitSelector(async (circuitFile) => {
     await circuitManager.loadCircuit(circuitFile);
 
-    // Extract circuit name from filename (remove extension and path)
     const circuitName = circuitFile.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
 
-    // Load racing line for the circuit with same rotation
     try {
       await carManager.loadRacingLine(circuitName, circuitFile.rotation);
     } catch (error) {
@@ -64,7 +61,6 @@ async function initVisualization(selectedRound?: number) {
 
   await circuitManager.loadCircuit(circuitToLoad);
 
-  // Load racing line for selected circuit with same rotation
   const circuitName = circuitToLoad.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
 
   try {
@@ -73,19 +69,37 @@ async function initVisualization(selectedRound?: number) {
     console.warn(`Racing line not found for ${circuitName}:`, error);
   }
 
-  // Start animation loop with car updates
   startAnimationLoop(renderer, scene, camera, controls, (deltaTime: number) => {
     carManager.update(deltaTime);
   });
 }
 
-// Show Data Fetcher first
 function init() {
+  const storedSelection = sessionStorage.getItem('f1Selection');
+
+  if (storedSelection) {
+    try {
+      const selection = JSON.parse(storedSelection);
+      console.log('Found stored selection:', selection);
+
+      sessionStorage.removeItem('f1Selection');
+
+      initVisualization(selection.round).catch((error) => {
+        console.error('Failed to initialize visualization:', error);
+        document.body.innerHTML = `
+          <p>Failed to initialize visualization: ${error.message}</p>
+        `;
+      });
+      return;
+    } catch (error) {
+      console.error('Error parsing stored selection:', error);
+    }
+  }
+
   const fetcherContainer = document.createElement('div');
   document.body.appendChild(fetcherContainer);
 
   new DataFetcher(fetcherContainer, (year: number, round: number, sessionType: string) => {
-    // Callback: start visualization after data is fetched with the selected round
     console.log(`Data fetched for ${year} Round ${round} - ${sessionType}`);
     initVisualization(round).catch((error) => {
       console.error('Failed to initialize visualization:', error);
@@ -96,5 +110,4 @@ function init() {
   });
 }
 
-// Start the application
 init();

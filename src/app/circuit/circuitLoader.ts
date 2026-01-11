@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
-import { createCurbstoneMaterial } from '../materials/curbstoneMaterial.js';
+import { createCurbstoneMaterial } from '../core/materials.js';
 import type { CircuitFormat, CircuitFile } from '../../types';
 
 export type { CircuitFormat, CircuitFile };

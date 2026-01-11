@@ -19,9 +19,6 @@
   },
   "dependencies": {
     "lil-gui": "^0.21.0",
-    "stream-chain": "^3.4.0",
-    "stream-json": "^1.9.1",
-    "three": "^0.182.0",
-    "ws": "^8.19.0"
+    "three": "^0.182.0"
   }
 }

@@ -5,7 +5,6 @@ export function setupCircuitSelector(onCircuitChange: (circuitFile: CircuitFile)
   const circuitSelect = document.getElementById('circuit-select') as HTMLSelectElement;
   if (!circuitSelect) return;
 
-  // Populate circuit selector
   circuitSelect.innerHTML = '';
   const circuits = getAvailableCircuits();
   circuits.forEach((circuit) => {

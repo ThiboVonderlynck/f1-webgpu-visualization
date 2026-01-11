@@ -12,13 +12,11 @@ export function startAnimationLoop(renderer: WebGPURenderer, scene: Scene, camer
   function animate(time: number) {
     requestAnimationFrame(animate);
 
-    // Calculate delta time in seconds
     const deltaTime = (time - previousTime) / 1000;
     previousTime = time;
 
     controls.update();
 
-    // Call update callback if provided
     if (onUpdate) {
       onUpdate(deltaTime);
     }
