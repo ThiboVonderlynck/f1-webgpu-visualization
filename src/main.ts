@@ -1,20 +1,19 @@
 import { checkWebGPUSupport } from './utils/webgpuCheck.js';
-import { createRenderer, createScene, addGridHelper, createCamera, createControls, setupCameraResize, addLights, startAnimationLoop } from './app/core';
-import { CircuitManager, getDefaultCircuit } from './app/circuit';
-import { CarManager } from './app/cars';
-import { setupCircuitSelector } from './app/ui/circuitSelector.js';
+import { createRenderer, createScene, createCamera, createControls, setupCameraResize, addLights, startAnimationLoop } from './app/core';
+import { CircuitManager } from './app/circuit';
 import { DataFetcher } from './app/ui/DataFetcher.js';
-import GUI from 'lil-gui';
+import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './app/playback';
+import type { TrackData } from './app/circuit/trackRenderer.js';
 import './styles/dataFetcher.css';
+import './styles/playbackUI.css';
 
-async function initVisualization(selectedRound?: number) {
+async function initVisualization(trackData: TrackData) {
   checkWebGPUSupport();
 
   const renderer = createRenderer();
   await renderer.init();
 
   const scene = createScene();
-  addGridHelper(scene);
 
   const camera = createCamera();
   const controls = createControls(camera, renderer.domElement);
@@ -26,73 +25,80 @@ async function initVisualization(selectedRound?: number) {
 
   addLights(scene);
 
-  // Create GUI
-  const gui = new GUI();
-  gui.title('F1 Circuit Controls');
-
   const circuitManager = new CircuitManager(scene, camera, controls);
-  const carManager = new CarManager(scene, gui);
-
-  // Determine which circuit to load
-  let circuitToLoad = getDefaultCircuit();
-
-  if (selectedRound) {
-    const circuitFilename = DataFetcher.getCircuitForRound(selectedRound);
-    if (circuitFilename) {
-      circuitToLoad = {
-        displayName: circuitFilename.replace('.stl', ''),
-        filename: `generated/${circuitFilename}`,
-        format: 'stl' as const,
-        rotation: 0,
-      };
-    }
+  if (trackData) {
+    await circuitManager.loadTrackFromTelemetry(trackData);
+    console.log('✅ Track loaded from telemetry');
+  } else {
+    console.warn('⚠️ No track data provided');
   }
 
-  setupCircuitSelector(async (circuitFile) => {
-    await circuitManager.loadCircuit(circuitFile);
+  // Initialize WebSocket streaming and playback
+  const wsClient = new WebSocketClient('ws://localhost:3001');
+  const playbackController = new PlaybackController();
+  const carRenderer = new CarRenderer(scene);
 
-    // Extract circuit name from filename (remove extension and path)
-    const circuitName = circuitFile.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
+  // Create playback UI
+  const playbackContainer = document.createElement('div');
+  document.body.appendChild(playbackContainer);
+  const playbackUI = new PlaybackUI(playbackContainer, playbackController, wsClient);
 
-    // Load racing line for the circuit with same rotation
-    try {
-      await carManager.loadRacingLine(circuitName, circuitFile.rotation);
-    } catch (error) {
-      console.warn(`Racing line not found for ${circuitName}:`, error);
-    }
-  }, circuitToLoad);
+  // Handle incoming telemetry data
+  wsClient.onMetadata((metadata) => {
+    console.log('📊 Received metadata:', metadata);
+    playbackController.setTotalFrames(metadata.totalFrames);
+    carRenderer.initializeCars(metadata);
+  });
 
-  await circuitManager.loadCircuit(circuitToLoad);
+  wsClient.onFrame((frame) => {
+    carRenderer.updatePositions(frame);
+    // Use frameNumber from server if available, otherwise calculate from time
+    const frameNumber = frame.frameNumber ?? Math.floor(frame.t * 25);
+    playbackController.updateFrame(frameNumber);
+  });
 
-  // Load racing line for selected circuit with same rotation
-  const circuitName = circuitToLoad.filename.replace('generated/', '').replace(/\.(stl|3mf)$/, '');
+  wsClient.onConnected(() => {
+    console.log('✅ WebSocket connected - ready for playback');
+  });
+
+  wsClient.onDisconnected(() => {
+    console.warn('⚠️ WebSocket disconnected');
+  });
 
   try {
-    await carManager.loadRacingLine(circuitName, circuitToLoad.rotation);
+    await wsClient.connect();
   } catch (error) {
-    console.warn(`Racing line not found for ${circuitName}:`, error);
+    console.error('Failed to connect to WebSocket server:', error);
+    alert('Failed to connect to streaming server. Make sure the Node.js server is running on port 3001.');
   }
 
-  // Start animation loop with car updates
-  startAnimationLoop(renderer, scene, camera, controls, (deltaTime) => {
-    carManager.update(deltaTime);
-  });
+  startAnimationLoop(renderer, scene, camera, controls, () => {});
 }
 
-// Show Data Fetcher first
 function init() {
   const fetcherContainer = document.createElement('div');
   document.body.appendChild(fetcherContainer);
 
-  new DataFetcher(fetcherContainer, (year: number, round: number, sessionType: string) => {
-    // Callback: start visualization after data is fetched with the selected round
-    console.log(`Data fetched for ${year} Round ${round} - ${sessionType}`);
-    initVisualization(round).catch((error) => {
+  new DataFetcher(fetcherContainer, async (year: number, round: number, sessionType: string, trackData: TrackData) => {
+    console.log(`✅ Data fetched for ${year} Round ${round} - ${sessionType}`);
+
+    if (!trackData) {
+      console.error('❌ No track data received from backend');
+      return;
+    }
+
+    try {
+      await initVisualization(trackData);
+      console.log('🏁 Visualization initialized - ready for playback!');
+    } catch (error) {
       console.error('Failed to initialize visualization:', error);
       document.body.innerHTML = `
-        <p>Failed to initialize visualization: ${error.message}</p>
+        <div style="padding: 20px; color: red;">
+          <h2>❌ Failed to initialize visualization</h2>
+          <p>${error instanceof Error ? error.message : 'Unknown error'}</p>
+        </div>
       `;
-    });
+    }
   });
 }
 

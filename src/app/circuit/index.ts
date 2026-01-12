@@ -1,5 +1,5 @@
+// Circuit module - using telemetry-based tracks
+// Reference: Simplified to match reference solution approach
 export { CircuitManager } from './circuitManager';
-export { RacingLine } from './racingLine';
-export { loadCircuitGeometry, processCircuitGeometry, createCircuitMesh } from './circuitLoader';
-export { getAvailableCircuits, getDefaultCircuit } from './circuitDiscovery';
-export type { CircuitFile, CircuitFormat } from './circuitLoader';
+export { TrackRenderer, type TrackData } from './trackRenderer';
+export { RacingLine } from './racingLine'; // Stub for now, TODO: implement telemetry-based animation

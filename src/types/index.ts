@@ -1,12 +1,5 @@
-// Circuit types
-export type CircuitFormat = 'stl' | '3mf';
-
-export interface CircuitFile {
-  filename: string;
-  format: CircuitFormat;
-  displayName: string;
-  rotation?: number;
-}
+// Circuit types - REMOVED (now using telemetry-based tracks)
+// Previously: CircuitFile, CircuitFormat for STL/3MF loading
 
 // Car types
 export interface CarConfig {

@@ -1,51 +1,62 @@
 import * as THREE from 'three';
-import { loadCircuitGeometry, processCircuitGeometry, createCircuitMesh } from './circuitLoader.js';
-import { positionCameraForCircuit } from '../core/camera.js';
-import type { CircuitFile } from '../../types';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TrackRenderer, type TrackData } from './trackRenderer.js';
 
 export class CircuitManager {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
-  private controls: any; // OrbitControls
-  private currentCircuit: THREE.Mesh | null = null;
+  private controls: OrbitControls;
+  private trackRenderer: TrackRenderer;
+  private currentTrack: THREE.Group | null = null;
 
-  constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: any) {
+  constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) {
     this.scene = scene;
     this.camera = camera;
     this.controls = controls;
+    this.trackRenderer = new TrackRenderer(scene);
   }
 
-  async loadCircuit(circuitFile: CircuitFile): Promise<void> {
+  async loadTrackFromTelemetry(trackData: TrackData): Promise<void> {
     try {
-      if (this.currentCircuit) {
-        this.removeCircuit();
+      if (!trackData) {
+        console.warn('No track data provided for rendering.');
+        return;
       }
 
-      const geometry = await loadCircuitGeometry(circuitFile.filename, circuitFile.format);
-      const { maxDimension } = processCircuitGeometry(geometry);
-      const circuit = createCircuitMesh(geometry, circuitFile.rotation);
-
-      this.scene.add(circuit);
-      this.currentCircuit = circuit;
-      positionCameraForCircuit(this.camera, this.controls, maxDimension);
+      this.trackRenderer.loadTrack(trackData);
+      this.adjustCameraToTrack(trackData.bounds);
+      this.currentTrack = this.trackRenderer.getBounds() ? new THREE.Group() : null;
     } catch (error) {
-      console.error('Error loading circuit:', error);
+      console.error('Error loading track from telemetry:', error);
       throw error;
     }
   }
 
-  private removeCircuit(): void {
-    if (this.currentCircuit) {
-      this.scene.remove(this.currentCircuit);
-      this.currentCircuit.geometry.dispose();
-      if (this.currentCircuit.material instanceof THREE.Material) {
-        this.currentCircuit.material.dispose();
-      }
-      this.currentCircuit = null;
-    }
+  private adjustCameraToTrack(bounds: { x_min: number; x_max: number; y_min: number; y_max: number }): void {
+    if (!bounds) return;
+
+    const { x_min, x_max, y_min, y_max } = bounds;
+    const centerX = (x_min + x_max) / 2;
+    const centerZ = (y_min + y_max) / 2;
+    const sizeX = x_max - x_min;
+    const sizeZ = y_max - y_min;
+
+    console.log(`📐 Track bounds: X[${x_min.toFixed(0)}, ${x_max.toFixed(0)}] Y[${y_min.toFixed(0)}, ${y_max.toFixed(0)}]`);
+
+    const diagonal = Math.sqrt(sizeX * sizeX + sizeZ * sizeZ);
+    const fov = this.camera.fov * (Math.PI / 180);
+    let cameraHeight = Math.abs(diagonal / (2 * Math.tan(fov / 2)));
+    cameraHeight *= 1.8;
+
+    this.camera.position.set(centerX, cameraHeight, centerZ);
+    this.camera.lookAt(centerX, 0, centerZ);
+    this.controls.target.set(centerX, 0, centerZ);
+    this.controls.update();
+
+    console.log(`✅ Camera positioned at (${centerX.toFixed(0)}, ${cameraHeight.toFixed(0)}, ${centerZ.toFixed(0)})`);
   }
 
-  getCurrentCircuit(): THREE.Mesh | null {
-    return this.currentCircuit;
+  getCurrentTrack(): THREE.Group | null {
+    return this.currentTrack;
   }
 }

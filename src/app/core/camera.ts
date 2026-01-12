@@ -2,7 +2,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 export function createCamera(): THREE.PerspectiveCamera {
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+  // Create camera with wide far plane to accommodate large tracks (F1 tracks can span 7km+)
+  const camera = new THREE.PerspectiveCamera(
+    60, // FOV
+    window.innerWidth / window.innerHeight, // Aspect ratio
+    0.1, // Near plane
+    50000 // Far plane (50km to be safe)
+  );
   return camera;
 }
 

@@ -1,216 +1,87 @@
+/**
+ * RacingLine - STUB for now
+ * TODO: Replace with telemetry-based car animation (reference solution uses actual telemetry data)
+ * Reference: main.py line 200+ (animates cars from telemetry frames)
+ */
 import * as THREE from 'three';
 
 export class RacingLine {
-  private curve: THREE.CatmullRomCurve3 | null = null;
   private points: THREE.Vector3[] = [];
-  private circuitName: string = '';
+  private loaded: boolean = false;
 
   /**
-   * Load centerline data from JSON file and apply same transformations as the circuit STL.
-   * @param circuitName - Name of the circuit (e.g., 'bahrain', 'monaco')
-   * @param rotation - Optional rotation to match circuit orientation
+   * Stub: Load racing line (will be replaced with telemetry-based animation)
    */
   async load(circuitName: string, rotation?: number): Promise<void> {
-    try {
-      const response = await fetch(`/data/circuits/generated/${circuitName}_centerline.json`);
+    console.warn('⚠️ RacingLine.load() is a stub - cars will not move yet');
+    console.warn('   TODO: Implement telemetry-based car animation');
 
-      if (!response.ok) {
-        throw new Error(`Failed to load centerline for ${circuitName}: ${response.statusText}`);
-      }
+    // Create a simple circular path as placeholder
+    const radius = 100;
+    const segments = 100;
 
-      const data: number[][] = await response.json();
-
-      // Convert to Vector3 array
-      let points = data.map(([x, y, z]) => new THREE.Vector3(x, y, z));
-
-      // Apply same transformations as STL circuit
-      points = this.applyCircuitTransformations(points, rotation);
-
-      this.points = points;
-
-      // Create closed CatmullRom curve (true = closed loop)
-      this.curve = new THREE.CatmullRomCurve3(this.points, true);
-      this.circuitName = circuitName;
-
-      console.log(`✓ Racing line loaded for ${circuitName}: ${this.points.length} points`);
-    } catch (error) {
-      console.error(`Error loading racing line for ${circuitName}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Apply same transformations as circuit STL: center, scale, and rotate.
-   * Matches the logic from circuitLoader.ts processCircuitGeometry and createCircuitMesh.
-   */
-  private applyCircuitTransformations(points: THREE.Vector3[], rotation?: number): THREE.Vector3[] {
-    // Calculate bounding box
-    const box = new THREE.Box3().setFromPoints(points);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDimension = Math.max(size.x, size.y, size.z);
-
-    // Calculate scale factor (same as STL)
-    const TARGET_SIZE = 200;
-    const scaleFactor = maxDimension > TARGET_SIZE ? TARGET_SIZE / maxDimension : 1;
-
-    // Apply transformations
-    let transformedPoints = points.map((point) => {
-      // 1. Center (translate to origin)
-      const centered = point.clone().sub(center);
-
-      // 2. Scale
-      const scaled = centered.multiplyScalar(scaleFactor);
-
-      return scaled;
-    });
-
-    // 3. Rotate to match circuit mesh orientation
-    // Circuit mesh gets: rotation.x = -Math.PI / 2 (flip to horizontal)
-    // Then optional custom rotation.z
-    const rotationMatrix = new THREE.Matrix4();
-
-    // First rotation: flip from vertical to horizontal (same as circuit)
-    rotationMatrix.makeRotationX(-Math.PI / 2);
-
-    // Apply custom rotation if provided
-    if (rotation !== undefined) {
-      const customRotation = new THREE.Matrix4().makeRotationZ(rotation);
-      rotationMatrix.multiply(customRotation);
+    for (let i = 0; i < segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      this.points.push(new THREE.Vector3(x, 0, z));
     }
 
-    transformedPoints = transformedPoints.map((point) => {
-      return point.applyMatrix4(rotationMatrix);
-    });
-
-    return transformedPoints;
+    this.loaded = true;
+    return Promise.resolve();
   }
 
   /**
-   * Get position on the racing line at normalized distance t (0-1).
-   * @param t - Normalized position along the curve (0 = start, 1 = end/loop back to start)
-   * @returns Position vector at t
+   * Check if racing line is loaded
    */
-  getPositionAt(t: number): THREE.Vector3 {
-    if (!this.curve) {
-      throw new Error('Racing line not loaded. Call load() first.');
-    }
-    return this.curve.getPointAt(t);
+  isLoaded(): boolean {
+    return this.loaded;
   }
 
   /**
-   * Get tangent (direction) at normalized distance t (0-1).
-   * Useful for orienting cars along the racing line.
-   * @param t - Normalized position along the curve
-   * @returns Normalized tangent vector at t
-   */
-  getTangentAt(t: number): THREE.Vector3 {
-    if (!this.curve) {
-      throw new Error('Racing line not loaded. Call load() first.');
-    }
-    return this.curve.getTangentAt(t).normalize();
-  }
-
-  /**
-   * Get rotation matrix for orienting an object along the racing line.
-   * @param t - Normalized position along the curve
-   * @param upVector - Up vector (default: Y-up)
-   * @returns Rotation matrix
-   */
-  getRotationMatrixAt(t: number, upVector: THREE.Vector3 = new THREE.Vector3(0, 1, 0)): THREE.Matrix4 {
-    const point = this.getPositionAt(t);
-    const tangent = this.getTangentAt(t);
-    const target = point.clone().add(tangent);
-
-    const rotationMatrix = new THREE.Matrix4();
-    rotationMatrix.lookAt(point, target, upVector);
-
-    return rotationMatrix;
-  }
-
-  /**
-   * Get quaternion rotation for orienting an object along the racing line.
-   * @param t - Normalized position along the curve
-   * @returns Quaternion rotation
-   */
-  getQuaternionAt(t: number): THREE.Quaternion {
-    const matrix = this.getRotationMatrixAt(t);
-    const quaternion = new THREE.Quaternion();
-    quaternion.setFromRotationMatrix(matrix);
-    return quaternion;
-  }
-
-  /**
-   * Place a 3D object on the racing line at position t.
-   * @param object - The Three.js object to position
-   * @param t - Normalized position (0-1)
-   * @param heightOffset - Optional height offset above the racing line
+   * Place an object at a position along the racing line
+   * @param object The object to place
+   * @param t Position along the line (0-1)
+   * @param heightOffset Height offset above the track
    */
   placeObjectAt(object: THREE.Object3D, t: number, heightOffset: number = 0): void {
-    const position = this.getPositionAt(t);
-    object.position.copy(position);
+    if (!this.loaded || this.points.length === 0) return;
 
-    if (heightOffset !== 0) {
-      object.position.y += heightOffset;
+    // Get position along the curve
+    const index = Math.floor(t * (this.points.length - 1));
+    const nextIndex = (index + 1) % this.points.length;
+    const localT = t * (this.points.length - 1) - index;
+
+    const currentPoint = this.points[index];
+    const nextPoint = this.points[nextIndex];
+
+    // Interpolate position
+    object.position.lerpVectors(currentPoint, nextPoint, localT);
+    object.position.y += heightOffset;
+
+    // Set rotation to face the next point
+    const direction = new THREE.Vector3().subVectors(nextPoint, currentPoint).normalize();
+    if (direction.lengthSq() > 0) {
+      const angle = Math.atan2(direction.x, direction.z);
+      object.rotation.y = angle;
     }
-
-    const rotationMatrix = this.getRotationMatrixAt(t);
-    object.setRotationFromMatrix(rotationMatrix);
   }
 
   /**
-   * Get a debug line to visualize the racing line in the scene.
-   * @param color - Color of the debug line (default: blue)
-   * @param lineWidth - Width of the line (default: 2)
-   * @returns Line object to add to the scene
+   * Create a debug visualization line
    */
-  createDebugLine(color: number = 0x0000ff, lineWidth: number = 2): THREE.Line {
-    if (!this.curve) {
-      throw new Error('Racing line not loaded. Call load() first.');
-    }
-
-    // Get more points for a smoother debug visualization
-    const points = this.curve.getPoints(this.points.length * 2);
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
-      color,
-      linewidth: lineWidth,
-    });
-
+  createDebugLine(color: number = 0x00ff00, linewidth: number = 2): THREE.Line {
+    const geometry = new THREE.BufferGeometry().setFromPoints(this.points);
+    const material = new THREE.LineBasicMaterial({ color, linewidth });
     const line = new THREE.Line(geometry, material);
-    line.position.y += 0.2; // Slightly above track to be visible
-
+    line.name = 'racing-line-debug';
     return line;
   }
 
   /**
-   * Get the total number of points in the racing line.
+   * Get all points
    */
-  getPointCount(): number {
-    return this.points.length;
-  }
-
-  /**
-   * Get the curve object directly (for advanced use cases).
-   */
-  getCurve(): THREE.CatmullRomCurve3 | null {
-    return this.curve;
-  }
-
-  /**
-   * Check if the racing line is loaded and ready to use.
-   */
-  isLoaded(): boolean {
-    return this.curve !== null;
-  }
-
-  /**
-   * Get the circuit name.
-   */
-  getCircuitName(): string {
-    return this.circuitName;
+  getPoints(): THREE.Vector3[] {
+    return this.points;
   }
 }

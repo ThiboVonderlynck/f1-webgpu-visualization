@@ -7,13 +7,13 @@ export class CarManager {
   private scene: THREE.Scene;
   private cars: Car[] = [];
   private racingLine: RacingLine | null = null;
-  private gui: GUI;
+  private gui: GUI | null = null; // Optional GUI
   private carFolders: Map<string, GUI> = new Map();
   private sceneFolderRef: GUI | null = null;
 
-  constructor(scene: THREE.Scene, gui: GUI) {
+  constructor(scene: THREE.Scene, gui?: GUI) {
     this.scene = scene;
-    this.gui = gui;
+    this.gui = gui || null;
     this.createDefaultCars();
   }
 
@@ -77,6 +77,9 @@ export class CarManager {
    * Create UI controls for cars.
    */
   private createUI(): void {
+    // Skip if no GUI available
+    if (!this.gui) return;
+
     // Remove existing car folders
     this.carFolders.forEach((folder) => folder.destroy());
     this.carFolders.clear();
@@ -86,7 +89,7 @@ export class CarManager {
 
     // Create folder for each car
     this.cars.forEach((car) => {
-      const folder = this.gui.addFolder(car.name);
+      const folder = this.gui!.addFolder(car.name);
       this.carFolders.set(car.name, folder);
 
       // Move checkbox
@@ -123,7 +126,7 @@ export class CarManager {
     });
 
     // Scene controls
-    const sceneFolder = this.gui.addFolder('Scene');
+    const sceneFolder = this.gui!.addFolder('Scene');
     this.sceneFolderRef = sceneFolder;
 
     // Race button

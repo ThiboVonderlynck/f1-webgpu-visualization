@@ -1,6 +1,14 @@
 interface Race {
   round: number;
   name: string;
+  date?: string;
+  country?: string;
+  type?: string;
+}
+
+interface Session {
+  code: string;
+  name: string;
 }
 
 interface FetchResponse {
@@ -9,59 +17,77 @@ interface FetchResponse {
   error?: string;
 }
 
-const API_URL = 'http://localhost:3001/api';
+// API URLs (following reference solution pattern)
+const PYTHON_API_URL = 'http://localhost:3002/api'; // Flask API for data selection
+const NODE_API_URL = 'http://localhost:3001/api'; // Node.js for fetch/load
 
-// Map race round numbers to circuit filenames
-const RACE_TO_CIRCUIT: { [key: number]: string } = {
-  1: 'bahrain.stl',
-  2: 'saudi.stl',
-  3: 'australia.stl',
-  4: 'japon.stl',
-  5: 'chinesse.stl',
-  6: 'miami.stl',
-  7: 'romagna.stl',
-  8: 'monaco.stl',
-  9: 'canadian.stl',
-  10: 'spanish.stl',
-  11: 'austrian.stl',
-  12: 'british.stl',
-  13: 'hungarian.stl',
-  14: 'belgique.stl',
-  15: 'dutch.stl',
-  16: 'italian.stl',
-  17: 'azerbaijan.stl',
-  18: 'singapour.stl',
-  19: 'usa.stl',
-  20: 'mexique.stl',
-  21: 'brazilian.stl',
-  22: 'usa-lv.stl',
-  23: 'quatar.stl',
-  24: 'abu-dhabi.stl',
-};
+// Removed RACE_TO_CIRCUIT mapping - tracks now built from telemetry data
 
 export class DataFetcher {
   private container: HTMLElement;
+  private years: number[] = [];
   private races: Race[] = [];
-  private onDataFetched?: (year: number, round: number, sessionType: string) => void;
+  private sessions: Session[] = [];
+  private selectedYear: number = 2024;
+  private selectedRound: number = 1;
+  private selectedSession: string = 'R';
+  private onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void;
 
-  constructor(container: HTMLElement, onDataFetched?: (year: number, round: number, sessionType: string) => void) {
+  constructor(container: HTMLElement, onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void) {
     this.container = container;
     this.onDataFetched = onDataFetched;
     this.init();
   }
 
   private async init() {
-    await this.loadRaces();
+    await this.loadYears();
+    await this.loadRaces(this.selectedYear);
+    await this.loadSessions(this.selectedYear, this.selectedRound);
     this.render();
   }
 
-  private async loadRaces() {
+  private async loadYears() {
     try {
-      const response = await fetch(`${API_URL}/races`);
+      const response = await fetch(`${PYTHON_API_URL}/years`);
       const data = await response.json();
-      this.races = data.races;
+      if (data.success) {
+        this.years = data.years;
+        this.selectedYear = this.years[0] || 2024;
+      }
+    } catch (error) {
+      console.error('Failed to load years:', error);
+      this.years = [2024, 2023, 2022]; // Fallback
+    }
+  }
+
+  private async loadRaces(year: number) {
+    try {
+      const response = await fetch(`${PYTHON_API_URL}/races?year=${year}`);
+      const data = await response.json();
+      if (data.success) {
+        this.races = data.races;
+        this.selectedRound = this.races[0]?.round || 1;
+      }
     } catch (error) {
       console.error('Failed to load races:', error);
+      this.races = [];
+    }
+  }
+
+  private async loadSessions(year: number, round: number) {
+    try {
+      const response = await fetch(`${PYTHON_API_URL}/sessions?year=${year}&round=${round}`);
+      const data = await response.json();
+      if (data.success) {
+        this.sessions = data.sessions;
+        this.selectedSession = this.sessions[0]?.code || 'R';
+      }
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+      this.sessions = [
+        { code: 'Q', name: 'Qualifying' },
+        { code: 'R', name: 'Race' },
+      ];
     }
   }
 
@@ -74,8 +100,7 @@ export class DataFetcher {
           <div class="field">
             <label>Year</label>
             <select id="year-select">
-              <option value="2024">2024 Season</option>
-              <option value="2023">2023 Season</option>
+              ${this.years.map((year) => `<option value="${year}" ${year === this.selectedYear ? 'selected' : ''}>${year} Season</option>`).join('')}
             </select>
           </div>
 
@@ -85,8 +110,10 @@ export class DataFetcher {
               ${this.races
                 .map(
                   (race) => `
-                <option value="${race.round}">Round ${race.round} - ${race.name}</option>
-              `
+                  <option value="${race.round}" ${race.round === this.selectedRound ? 'selected' : ''}>
+                    Round ${race.round} - ${race.name}
+                  </option>
+                `
                 )
                 .join('')}
             </select>
@@ -95,14 +122,16 @@ export class DataFetcher {
           <div class="field">
             <label>Session Type</label>
             <select id="session-select">
-              <option value="R">🏁 Race</option>
-              <option value="Q">⏱️ Qualifying</option>
-              <option value="S">⚡ Sprint</option>
-              <option value="SQ">⚡ Sprint Qualifying</option>
+              ${this.sessions
+                .map((session) => {
+                  const icon = session.code === 'R' ? '🏁' : session.code === 'Q' ? '⏱️' : '⚡';
+                  return `<option value="${session.code}" ${session.code === this.selectedSession ? 'selected' : ''}>${icon} ${session.name}</option>`;
+                })
+                .join('')}
             </select>
           </div>
 
-          <button id="fetch-button">Fetch Data</button>
+          <button id="fetch-button">Load Data & Start</button>
         </div>
 
         <div class="progress-container" id="progress-container">
@@ -124,7 +153,29 @@ export class DataFetcher {
 
   private attachEventListeners() {
     const button = this.container.querySelector('#fetch-button') as HTMLButtonElement;
+    const yearSelect = this.container.querySelector('#year-select') as HTMLSelectElement;
+    const raceSelect = this.container.querySelector('#race-select') as HTMLSelectElement;
+    const sessionSelect = this.container.querySelector('#session-select') as HTMLSelectElement;
+
     button?.addEventListener('click', () => this.handleFetch());
+
+    // Update races when year changes (reference solution pattern)
+    yearSelect?.addEventListener('change', async () => {
+      this.selectedYear = parseInt(yearSelect.value);
+      await this.loadRaces(this.selectedYear);
+      this.render();
+    });
+
+    // Update sessions when race changes
+    raceSelect?.addEventListener('change', async () => {
+      this.selectedRound = parseInt(raceSelect.value);
+      await this.loadSessions(this.selectedYear, this.selectedRound);
+      this.render();
+    });
+
+    sessionSelect?.addEventListener('change', () => {
+      this.selectedSession = sessionSelect.value;
+    });
   }
 
   private async handleFetch() {
@@ -159,34 +210,65 @@ export class DataFetcher {
     }, 300);
 
     try {
-      const response = await fetch(`${API_URL}/fetch`, {
+      // Step 1: Check if data exists (defensive programming)
+      progressStatus.textContent = 'Checking data...';
+      const checkResponse = await fetch(`${NODE_API_URL}/check/${year}/${round}/${sessionType}`);
+      const checkData = await checkResponse.json();
+
+      let needsFetch = !checkData.exists;
+
+      // Step 2: Fetch if needed
+      if (needsFetch) {
+        progressStatus.textContent = 'Fetching from FastF1...';
+        const fetchResponse = await fetch(`${NODE_API_URL}/fetch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year, round, sessionType }),
+        });
+
+        const fetchData: FetchResponse = await fetchResponse.json();
+        if (!fetchData.success) {
+          throw new Error(fetchData.error || 'Failed to fetch data');
+        }
+        console.log('✓ Data fetched successfully');
+      } else {
+        console.log('✓ Data already exists');
+      }
+
+      // Step 3: Load into Node.js server
+      progressStatus.textContent = 'Loading telemetry...';
+      const loadResponse = await fetch(`${NODE_API_URL}/load`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ year, round, sessionType }),
       });
 
-      const data: FetchResponse = await response.json();
+      const loadData = await loadResponse.json();
 
       clearInterval(progressInterval);
       progressBar.style.width = '100%';
       progressPercentage.textContent = '100%';
 
-      if (data.success) {
+      if (loadData.success) {
         progressStatus.textContent = 'Complete!';
-        messageContainer.innerHTML = `<div class="message success">✓ ${data.message}<br><br>🚀 Starting visualization...</div>`;
+        messageContainer.innerHTML = `
+          <div class="message success">
+            ✓ Loaded ${loadData.totalFrames.toLocaleString()} frames<br>
+            Drivers: ${loadData.drivers.length}<br><br>
+            🚀 Starting visualization...
+          </div>
+        `;
 
-        // Hide the fetcher after successful fetch
+        // Hide the fetcher after successful load
         setTimeout(() => {
           this.container.style.display = 'none';
-          // Call callback to start the visualization with race info
+          // Call callback to start the visualization with track data
           if (this.onDataFetched) {
-            this.onDataFetched(year, round, sessionType);
+            this.onDataFetched(year, round, sessionType, loadData.track);
           }
         }, 2000);
       } else {
-        progressStatus.textContent = 'Failed';
-        progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #ff4d4d 100%)';
-        messageContainer.innerHTML = `<div class="message error">✗ ${data.error}</div>`;
+        throw new Error(loadData.error || 'Failed to load data');
       }
     } catch (error) {
       clearInterval(progressInterval);
@@ -206,8 +288,5 @@ export class DataFetcher {
     }
   }
 
-  // Get circuit filename for a given round
-  static getCircuitForRound(round: number): string | null {
-    return RACE_TO_CIRCUIT[round] || null;
-  }
+  // Removed getCircuitForRound - tracks now built from telemetry data
 }
