@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""
-Flask API for F1 Data Selection
-Following reference solution pattern for race/session selection
-"""
+"""Flask API for F1 Data Selection"""
 import os
 import sys
 
-# Add parent directory to path FIRST (before any lib imports)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Run cache health check BEFORE importing fastf1 (which is imported by f1_data)
-# This detects and auto-clears corrupted cache that causes slow imports
 from lib.cache_manager import check_cache_health
 check_cache_health()
 
@@ -21,20 +15,15 @@ from datetime import datetime
 from lib.f1_data import get_race_weekends_by_year, enable_cache
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
-# Enable FastF1 cache on startup
 enable_cache()
 
 @app.route('/api/years', methods=['GET'])
 def api_years():
-    """
-    Get list of available years
-    Reference: cli_race_selection.py line 22
-    """
+    """Get list of available years"""
     try:
         current_year = datetime.now().year
-        # FastF1 data available from 2018 onwards (reliable)
         years = list(range(current_year, 2017, -1))
         return jsonify({
             'success': True,
@@ -48,10 +37,7 @@ def api_years():
 
 @app.route('/api/races', methods=['GET'])
 def api_races():
-    """
-    Get list of races for a given year
-    Reference: cli_race_selection.py line 35-38
-    """
+    """Get list of races for a given year"""
     year = request.args.get('year', type=int)
     
     if not year:
@@ -64,7 +50,6 @@ def api_races():
         print(f"Fetching races for {year}...")
         races = get_race_weekends_by_year(year)
         
-        # Format for frontend (matching reference CLI output)
         formatted_races = [{
             'round': race['round_number'],
             'name': race['event_name'],
@@ -88,10 +73,7 @@ def api_races():
 
 @app.route('/api/sessions', methods=['GET'])
 def api_sessions():
-    """
-    Get available session types for a specific race
-    Reference: cli_race_selection.py line 42-47
-    """
+    """Get available session types for a specific race"""
     year = request.args.get('year', type=int)
     round_number = request.args.get('round', type=int)
     
@@ -112,14 +94,11 @@ def api_sessions():
                 'error': f'Race not found for year {year} round {round_number}'
             }), 404
         
-        # Base sessions (always available) - Reference pattern
         sessions = [
             {'code': 'Q', 'name': 'Qualifying'},
             {'code': 'R', 'name': 'Race'}
         ]
         
-        # Add sprint sessions if sprint weekend
-        # Reference: cli_race_selection.py line 43-47
         event_type = (race['type'] or '').lower()
         if 'sprint' in event_type:
             sessions.insert(0, {'code': 'SQ', 'name': 'Sprint Qualifying'})

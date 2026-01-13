@@ -35,38 +35,33 @@ async function initVisualization(trackData: TrackData) {
     console.warn('⚠️ No track data provided');
   }
 
-  // Initialize WebSocket streaming and playback
   const wsClient = new WebSocketClient('ws://localhost:3001');
   const playbackController = new PlaybackController();
   const carRenderer = new CarRenderer(scene);
 
-  // Create playback UI
   const playbackContainer = document.createElement('div');
   document.body.appendChild(playbackContainer);
   const playbackUI = new PlaybackUI(playbackContainer, playbackController, wsClient);
 
-  // Create leaderboard UI
   const leaderboardContainer = document.createElement('div');
   document.body.appendChild(leaderboardContainer);
   const leaderboard = new Leaderboard(leaderboardContainer);
 
-  // Set track centerline for position projection (race_replay.py line 88-98)
   if (trackData && trackData.centerline) {
     leaderboard.setTrackCenterline(trackData.centerline);
   }
 
-  // Handle incoming telemetry data
   wsClient.onMetadata((metadata) => {
     console.log('📊 Received metadata:', metadata);
     playbackController.setTotalFrames(metadata.totalFrames);
     carRenderer.initializeCars(metadata);
     leaderboard.setDriverColors(metadata.driverColors);
+    leaderboard.setTotalLaps(metadata.totalLaps || 0);
   });
 
   wsClient.onFrame((frame) => {
     carRenderer.updatePositions(frame);
     leaderboard.updateFromFrame(frame);
-    // Use frameNumber from server if available, otherwise calculate from time
     const frameNumber = frame.frameNumber ?? Math.floor(frame.t * 25);
     playbackController.updateFrame(frameNumber);
   });
@@ -116,5 +111,4 @@ function init() {
   });
 }
 
-// Start the application
 init();
