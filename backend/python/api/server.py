@@ -3,14 +3,20 @@
 Flask API for F1 Data Selection
 Following reference solution pattern for race/session selection
 """
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from datetime import datetime
 import os
 import sys
 
-# Add parent directory to path
+# Add parent directory to path FIRST (before any lib imports)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Run cache health check BEFORE importing fastf1 (which is imported by f1_data)
+# This detects and auto-clears corrupted cache that causes slow imports
+from lib.cache_manager import check_cache_health
+check_cache_health()
+
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from datetime import datetime
 
 from lib.f1_data import get_race_weekends_by_year, enable_cache
 
