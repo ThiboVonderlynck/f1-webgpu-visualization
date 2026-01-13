@@ -23,8 +23,7 @@ enable_cache()
 def api_years():
     """Get list of available years"""
     try:
-        current_year = datetime.now().year
-        years = list(range(current_year, 2017, -1))
+        years = list(range(2025, 2017, -1))
         return jsonify({
             'success': True,
             'years': years

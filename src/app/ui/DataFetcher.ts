@@ -17,20 +17,18 @@ interface FetchResponse {
   error?: string;
 }
 
-// API URLs (following reference solution pattern)
-const PYTHON_API_URL = 'http://localhost:3002/api'; // Flask API for data selection
-const NODE_API_URL = 'http://localhost:3001/api'; // Node.js for fetch/load
-
-// Removed RACE_TO_CIRCUIT mapping - tracks now built from telemetry data
+const PYTHON_API_URL = 'http://localhost:3002/api';
+const NODE_API_URL = 'http://localhost:3001/api';
 
 export class DataFetcher {
   private container: HTMLElement;
   private years: number[] = [];
   private races: Race[] = [];
   private sessions: Session[] = [];
+  private cachedRaces: { [round: number]: string[] } = {};
   private selectedYear: number = 2024;
-  private selectedRound: number = 1;
-  private selectedSession: string = 'R';
+  private selectedRound: number = 0;
+  private selectedSession: string = '';
   private onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void;
 
   constructor(container: HTMLElement, onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void) {
@@ -42,6 +40,7 @@ export class DataFetcher {
   private async init() {
     await this.loadYears();
     await this.loadRaces(this.selectedYear);
+    await this.loadCachedStatus(this.selectedYear);
     await this.loadSessions(this.selectedYear, this.selectedRound);
     this.render();
   }
@@ -56,7 +55,7 @@ export class DataFetcher {
       }
     } catch (error) {
       console.error('Failed to load years:', error);
-      this.years = [2024, 2023, 2022]; // Fallback
+      this.years = [2024, 2023, 2022];
     }
   }
 
@@ -66,7 +65,6 @@ export class DataFetcher {
       const data = await response.json();
       if (data.success) {
         this.races = data.races;
-        this.selectedRound = this.races[0]?.round || 1;
       }
     } catch (error) {
       console.error('Failed to load races:', error);
@@ -80,7 +78,6 @@ export class DataFetcher {
       const data = await response.json();
       if (data.success) {
         this.sessions = data.sessions;
-        this.selectedSession = this.sessions[0]?.code || 'R';
       }
     } catch (error) {
       console.error('Failed to load sessions:', error);
@@ -91,47 +88,80 @@ export class DataFetcher {
     }
   }
 
+  private async loadCachedStatus(year: number) {
+    try {
+      const response = await fetch(`${NODE_API_URL}/cached/${year}`);
+      const data = await response.json();
+      if (data.success) {
+        this.cachedRaces = data.cached;
+      }
+    } catch (error) {
+      console.error('Failed to load cache status:', error);
+      this.cachedRaces = {};
+    }
+  }
+
   private render() {
+    const checkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`;
+    
     this.container.innerHTML = `
       <div class="data-fetcher">
-        <h2>🏎️ F1 Telemetry Fetcher</h2>
-        
-        <div class="form">
-          <div class="field">
-            <label>Year</label>
-            <select id="year-select">
-              ${this.years.map((year) => `<option value="${year}" ${year === this.selectedYear ? 'selected' : ''}>${year} Season</option>`).join('')}
-            </select>
+        <div class="data-fetcher-header">
+          <div class="logo-container">
+            <div class="logo-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 8v8m-4-4h8"/>
+              </svg>
+            </div>
+            <h1>F1 TELEMETRY FETCHER</h1>
           </div>
+          <div class="divider"></div>
+        </div>
 
-          <div class="field">
-            <label>Grand Prix</label>
-            <select id="race-select">
-              ${this.races
-                .map(
-                  (race) => `
-                  <option value="${race.round}" ${race.round === this.selectedRound ? 'selected' : ''}>
-                    Round ${race.round} - ${race.name}
-                  </option>
-              `
-                )
-                .join('')}
-            </select>
+        <div class="section">
+          <div class="section-title">Select Year</div>
+          <div class="option-grid years">
+            ${this.years.map(year => `
+              <div class="option-card ${year === this.selectedYear ? 'selected' : ''}" data-type="year" data-value="${year}">
+                <div class="check-icon">${checkIcon}</div>
+                <div class="option-text">${year}</div>
+              </div>
+            `).join('')}
           </div>
+        </div>
 
-          <div class="field">
-            <label>Session Type</label>
-            <select id="session-select">
-              ${this.sessions
-                .map((session) => {
-                  const icon = session.code === 'R' ? '🏁' : session.code === 'Q' ? '⏱️' : '⚡';
-                  return `<option value="${session.code}" ${session.code === this.selectedSession ? 'selected' : ''}>${icon} ${session.name}</option>`;
-                })
-                .join('')}
-            </select>
+        <div class="section">
+          <div class="section-title">Select Grand Prix</div>
+          <div class="option-grid races">
+            ${this.races.map(race => {
+              const cached = this.cachedRaces[race.round] || [];
+              const hasCached = cached.length > 0;
+              return `
+              <div class="option-card ${race.round === this.selectedRound ? 'selected' : ''} ${hasCached ? 'cached' : ''}" data-type="race" data-value="${race.round}">
+                <div class="check-icon">${checkIcon}</div>
+                ${hasCached ? '<div class="cached-badge">CACHED</div>' : ''}
+                <div class="round-label">ROUND ${race.round}</div>
+                <div class="option-text">${race.name}</div>
+              </div>
+            `}).join('')}
           </div>
+        </div>
 
-          <button id="fetch-button">Load Data & Start</button>
+        <div class="section">
+          <div class="section-title">Select Session</div>
+          <div class="option-grid sessions">
+            ${this.sessions.map(session => `
+              <div class="option-card ${session.code === this.selectedSession ? 'selected' : ''}" data-type="session" data-value="${session.code}">
+                <div class="check-icon">${checkIcon}</div>
+                <div class="option-text">${session.name}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="load-button-container">
+          <button class="load-button" id="fetch-button">LOAD DATA & START</button>
         </div>
 
         <div class="progress-container" id="progress-container">
@@ -153,35 +183,36 @@ export class DataFetcher {
 
   private attachEventListeners() {
     const button = this.container.querySelector('#fetch-button') as HTMLButtonElement;
-    const yearSelect = this.container.querySelector('#year-select') as HTMLSelectElement;
-    const raceSelect = this.container.querySelector('#race-select') as HTMLSelectElement;
-    const sessionSelect = this.container.querySelector('#session-select') as HTMLSelectElement;
-
     button?.addEventListener('click', () => this.handleFetch());
 
-    // Update races when year changes (reference solution pattern)
-    yearSelect?.addEventListener('change', async () => {
-      this.selectedYear = parseInt(yearSelect.value);
-      await this.loadRaces(this.selectedYear);
-      this.render();
-    });
+    this.container.querySelectorAll('.option-card').forEach(card => {
+      card.addEventListener('click', async (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const type = target.dataset.type;
+        const value = target.dataset.value;
 
-    // Update sessions when race changes
-    raceSelect?.addEventListener('change', async () => {
-      this.selectedRound = parseInt(raceSelect.value);
-      await this.loadSessions(this.selectedYear, this.selectedRound);
-      this.render();
-    });
-
-    sessionSelect?.addEventListener('change', () => {
-      this.selectedSession = sessionSelect.value;
+        if (type === 'year') {
+          this.selectedYear = parseInt(value!);
+          this.selectedRound = 0;
+          this.selectedSession = '';
+          await this.loadRaces(this.selectedYear);
+          await this.loadCachedStatus(this.selectedYear);
+          this.render();
+        } else if (type === 'race') {
+          this.selectedRound = parseInt(value!);
+          this.selectedSession = '';
+          await this.loadSessions(this.selectedYear, this.selectedRound);
+          this.render();
+        } else if (type === 'session') {
+          this.selectedSession = value!;
+          this.container.querySelectorAll('.option-card[data-type="session"]').forEach(c => c.classList.remove('selected'));
+          target.classList.add('selected');
+        }
+      });
     });
   }
 
   private async handleFetch() {
-    const yearSelect = this.container.querySelector('#year-select') as HTMLSelectElement;
-    const raceSelect = this.container.querySelector('#race-select') as HTMLSelectElement;
-    const sessionSelect = this.container.querySelector('#session-select') as HTMLSelectElement;
     const button = this.container.querySelector('#fetch-button') as HTMLButtonElement;
     const messageContainer = this.container.querySelector('#message-container') as HTMLElement;
     const progressContainer = this.container.querySelector('#progress-container') as HTMLElement;
@@ -189,18 +220,21 @@ export class DataFetcher {
     const progressPercentage = this.container.querySelector('#progress-percentage') as HTMLElement;
     const progressStatus = this.container.querySelector('#progress-status') as HTMLElement;
 
-    const year = parseInt(yearSelect.value);
-    const round = parseInt(raceSelect.value);
-    const sessionType = sessionSelect.value;
+    const year = this.selectedYear;
+    const round = this.selectedRound;
+    const sessionType = this.selectedSession;
+
+    if (!round || !sessionType) {
+      messageContainer.innerHTML = '<div class="message error">Please select a Grand Prix and Session first</div>';
+      return;
+    }
 
     button.disabled = true;
-    button.innerHTML = '<span class="loading-spinner"></span>Fetching...';
+    button.innerHTML = '<span class="loading-spinner"></span>LOADING...';
     messageContainer.innerHTML = '';
 
-    // Show progress bar
     progressContainer.classList.add('active');
 
-    // Simulate progress
     let progress = 0;
     const progressInterval = setInterval(() => {
       progress += Math.random() * 15;
@@ -210,14 +244,12 @@ export class DataFetcher {
     }, 300);
 
     try {
-      // Step 1: Check if data exists (defensive programming)
       progressStatus.textContent = 'Checking data...';
       const checkResponse = await fetch(`${NODE_API_URL}/check/${year}/${round}/${sessionType}`);
       const checkData = await checkResponse.json();
 
       let needsFetch = !checkData.exists;
 
-      // Step 2: Fetch if needed
       if (needsFetch) {
         progressStatus.textContent = 'Fetching from FastF1...';
         const fetchResponse = await fetch(`${NODE_API_URL}/fetch`, {
@@ -230,12 +262,8 @@ export class DataFetcher {
         if (!fetchData.success) {
           throw new Error(fetchData.error || 'Failed to fetch data');
         }
-        console.log('✓ Data fetched successfully');
-      } else {
-        console.log('✓ Data already exists');
       }
 
-      // Step 3: Load into Node.js server
       progressStatus.textContent = 'Loading telemetry...';
       const loadResponse = await fetch(`${NODE_API_URL}/load`, {
         method: 'POST',
@@ -253,20 +281,16 @@ export class DataFetcher {
         progressStatus.textContent = 'Complete!';
         messageContainer.innerHTML = `
           <div class="message success">
-            ✓ Loaded ${loadData.totalFrames.toLocaleString()} frames<br>
-            Drivers: ${loadData.drivers.length}<br><br>
-            🚀 Starting visualization...
+            ✓ Loaded ${loadData.totalFrames.toLocaleString()} frames • ${loadData.drivers.length} drivers
           </div>
         `;
 
-        // Hide the fetcher after successful load
         setTimeout(() => {
           this.container.style.display = 'none';
-          // Call callback to start the visualization with track data
           if (this.onDataFetched) {
             this.onDataFetched(year, round, sessionType, loadData.track);
           }
-        }, 2000);
+        }, 1500);
       } else {
         throw new Error(loadData.error || 'Failed to load data');
       }
@@ -274,12 +298,11 @@ export class DataFetcher {
       clearInterval(progressInterval);
       progressStatus.textContent = 'Error';
       progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #ff4d4d 100%)';
-      messageContainer.innerHTML = `<div class="message error">✗ Error: ${error instanceof Error ? error.message : 'Unknown error'}</div>`;
+      messageContainer.innerHTML = `<div class="message error">✗ ${error instanceof Error ? error.message : 'Unknown error'}</div>`;
     } finally {
       button.disabled = false;
-      button.textContent = 'Fetch Data';
+      button.textContent = 'LOAD DATA & START';
 
-      // Hide progress bar after a delay if there was an error
       if (!messageContainer.querySelector('.success')) {
         setTimeout(() => {
           progressContainer.classList.remove('active');
@@ -287,6 +310,4 @@ export class DataFetcher {
       }
     }
   }
-
-  // Removed getCircuitForRound - tracks now built from telemetry data
 }

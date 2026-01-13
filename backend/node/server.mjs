@@ -75,6 +75,34 @@ app.get('/api/check/:year/:round/:sessionType', async (req, res) => {
   }
 });
 
+app.get('/api/cached/:year', async (req, res) => {
+  const { year } = req.params;
+
+  try {
+    const telemetryDir = path.join(__dirname, '../../public/data/telemetry', String(year));
+    const cached = {};
+
+    if (existsSync(telemetryDir)) {
+      const files = readdirSync(telemetryDir);
+      
+      files.forEach(file => {
+        const match = file.match(/^(\d+)-.*_(race|qualifying|sprint)\.json$/);
+        if (match) {
+          const round = parseInt(match[1], 10);
+          const session = match[2] === 'race' ? 'R' : match[2] === 'qualifying' ? 'Q' : 'S';
+          
+          if (!cached[round]) cached[round] = [];
+          cached[round].push(session);
+        }
+      });
+    }
+
+    res.json({ success: true, cached });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/fetch', async (req, res) => {
   const { year, round, sessionType = 'R' } = req.body;
 
