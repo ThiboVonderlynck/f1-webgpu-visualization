@@ -2,10 +2,12 @@ import { checkWebGPUSupport } from './utils/webgpuCheck.js';
 import { createRenderer, createScene, createCamera, createControls, setupCameraResize, addLights, startAnimationLoop } from './app/core';
 import { CircuitManager } from './app/circuit';
 import { DataFetcher } from './app/ui/DataFetcher.js';
+import { Leaderboard } from './app/ui/Leaderboard.js';
 import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './app/playback';
 import type { TrackData } from './app/circuit/trackRenderer.js';
 import './styles/dataFetcher.css';
 import './styles/playbackUI.css';
+import './styles/leaderboard.css';
 
 async function initVisualization(trackData: TrackData) {
   checkWebGPUSupport();
@@ -43,15 +45,27 @@ async function initVisualization(trackData: TrackData) {
   document.body.appendChild(playbackContainer);
   const playbackUI = new PlaybackUI(playbackContainer, playbackController, wsClient);
 
+  // Create leaderboard UI
+  const leaderboardContainer = document.createElement('div');
+  document.body.appendChild(leaderboardContainer);
+  const leaderboard = new Leaderboard(leaderboardContainer);
+
+  // Set track centerline for position projection (race_replay.py line 88-98)
+  if (trackData && trackData.centerline) {
+    leaderboard.setTrackCenterline(trackData.centerline);
+  }
+
   // Handle incoming telemetry data
   wsClient.onMetadata((metadata) => {
     console.log('📊 Received metadata:', metadata);
     playbackController.setTotalFrames(metadata.totalFrames);
     carRenderer.initializeCars(metadata);
+    leaderboard.setDriverColors(metadata.driverColors);
   });
 
   wsClient.onFrame((frame) => {
     carRenderer.updatePositions(frame);
+    leaderboard.updateFromFrame(frame);
     // Use frameNumber from server if available, otherwise calculate from time
     const frameNumber = frame.frameNumber ?? Math.floor(frame.t * 25);
     playbackController.updateFrame(frameNumber);

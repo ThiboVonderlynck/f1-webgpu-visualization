@@ -39,6 +39,15 @@ def _process_single_driver(args):
         t_all = []
         x_all = []
         y_all = []
+        dist_all = []
+        rel_dist_all = []
+        lap_numbers = []
+        tyre_compounds = []
+        speed_all = []
+        gear_all = []
+        drs_all = []
+        throttle_all = []
+        brake_all = []
 
         # Iterate laps in order
         for _, lap in laps_driver.iterlaps():
@@ -51,10 +60,29 @@ def _process_single_driver(args):
                 t_lap = lap_tel["SessionTime"].dt.total_seconds().to_numpy()
                 x_lap = lap_tel["X"].to_numpy()
                 y_lap = lap_tel["Y"].to_numpy()
+                dist_lap = lap_tel["Distance"].to_numpy()
+                rel_dist_lap = lap_tel["RelativeDistance"].to_numpy()
+                speed_lap = lap_tel["Speed"].to_numpy()
+                gear_lap = lap_tel["nGear"].to_numpy()
+                drs_lap = lap_tel["DRS"].to_numpy()
+                throttle_lap = lap_tel["Throttle"].to_numpy()
+                brake_lap = lap_tel["Brake"].to_numpy()
+                
+                lap_number = lap['LapNumber']
+                tyre_compound = get_tyre_compound_int(lap['Compound'])
                 
                 t_all.append(t_lap)
                 x_all.append(x_lap)
                 y_all.append(y_lap)
+                dist_all.append(dist_lap)
+                rel_dist_all.append(rel_dist_lap)
+                lap_numbers.append(np.full_like(t_lap, lap_number))
+                tyre_compounds.append(np.full_like(t_lap, tyre_compound))
+                speed_all.append(speed_lap)
+                gear_all.append(gear_lap)
+                drs_all.append(drs_lap)
+                throttle_all.append(throttle_lap)
+                brake_all.append(brake_lap)
                 
             except Exception as e:
                 print(f"Error processing lap for {driver_code}: {e}")
@@ -65,10 +93,16 @@ def _process_single_driver(args):
             return None
 
         # Concatenate and sort
-        all_arrays = [t_all, x_all, y_all]
-        t_all, x_all, y_all = [np.concatenate(arr) for arr in all_arrays]
+        all_arrays = [t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers, 
+                      tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all]
+        t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers, \
+        tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all = [np.concatenate(arr) for arr in all_arrays]
+        
         order = np.argsort(t_all)
-        t_all, x_all, y_all = [arr[order] for arr in [t_all, x_all, y_all]]
+        all_data = [t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers,
+                    tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all]
+        t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers, \
+        tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all = [arr[order] for arr in all_data]
 
         print(f"Completed telemetry for driver: {driver_code}")
         
@@ -78,6 +112,15 @@ def _process_single_driver(args):
                 "t": t_all,
                 "x": x_all,
                 "y": y_all,
+                "dist": dist_all,
+                "rel_dist": rel_dist_all,
+                "lap": lap_numbers,
+                "tyre": tyre_compounds,
+                "speed": speed_all,
+                "gear": gear_all,
+                "drs": drs_all,
+                "throttle": throttle_all,
+                "brake": brake_all,
             },
             "t_min": float(t_all.min()),
             "t_max": float(t_all.max()),
@@ -93,7 +136,7 @@ def load_session(year, round_number, session_type='R'):
     try:
         print(f"Loading session: {year} Round {round_number} ({session_type})")
         session = fastf1.get_session(year, round_number, session_type)
-        session.load(telemetry=True, weather=True)
+        session.load(telemetry=True, weather=False)
         print(f"✓ Session loaded: {session.event['EventName']}")
         return session
     except Exception as e:
@@ -193,34 +236,74 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     for code, data in driver_data.items():
         t = data["t"] - global_t_min
         order = np.argsort(t)
-        t_sorted = t[order]
-        x_sorted = data["x"][order]
-        y_sorted = data["y"][order]
         
-        x_resampled = np.interp(timeline, t_sorted, x_sorted)
-        y_resampled = np.interp(timeline, t_sorted, y_sorted)
+        # Sort all arrays
+        arrays_to_resample = [
+            data["x"], data["y"], data["dist"], data["rel_dist"], data["lap"],
+            data["tyre"], data["speed"], data["gear"], data["drs"],
+            data["throttle"], data["brake"]
+        ]
+        sorted_arrays = [arr[order] for arr in arrays_to_resample]
+        t_sorted = t[order]
+        
+        # Interpolate numerical values
+        resampled = [np.interp(timeline, t_sorted, arr) for arr in sorted_arrays]
+        x_resampled, y_resampled, dist_resampled, rel_dist_resampled, lap_resampled, \
+        tyre_resampled, speed_resampled, gear_resampled, drs_resampled, \
+        throttle_resampled, brake_resampled = resampled
         
         resampled_data[code] = {
             "t": timeline,
             "x": x_resampled,
             "y": y_resampled,
+            "dist": dist_resampled,
+            "rel_dist": rel_dist_resampled,
+            "lap": lap_resampled,
+            "tyre": tyre_resampled,
+            "speed": speed_resampled,
+            "gear": gear_resampled,
+            "drs": drs_resampled,
+            "throttle": throttle_resampled,
+            "brake": brake_resampled,
         }
     
-    # Build frames (web-compatible format)
+    # Build frames with position calculation
     frames = []
     for i in range(len(timeline)):
         t = timeline[i]
-        frame_data = {}
         
+        # Calculate positions based on distance
+        driver_positions = []
+        for code, d in resampled_data.items():
+            driver_positions.append((code, float(d["dist"][i])))
+        
+        # Sort by distance (descending) to get positions
+        driver_positions.sort(key=lambda x: x[1], reverse=True)
+        position_map = {code: pos + 1 for pos, (code, _) in enumerate(driver_positions)}
+        
+        frame_data = {}
         for code, d in resampled_data.items():
             frame_data[code] = {
-                "t": round(float(t), 3),
                 "x": round(float(d["x"][i]), 2),
                 "y": round(float(d["y"][i]), 2),
+                "dist": round(float(d["dist"][i]), 2),
+                "rel_dist": round(float(d["rel_dist"][i]), 4),
+                "lap": int(round(d["lap"][i])),
+                "tyre": int(round(d["tyre"][i])),
+                "speed": round(float(d["speed"][i]), 1),
+                "gear": int(round(d["gear"][i])),
+                "drs": int(round(d["drs"][i])),
+                "throttle": round(float(d["throttle"][i]), 1),
+                "brake": round(float(d["brake"][i]), 1),
+                "position": position_map[code],
             }
+        
+        # Calculate leader's lap for the frame
+        leader_lap = max(int(round(d["lap"][i])) for d in resampled_data.values())
         
         frames.append({
             "t": round(float(t), 3),
+            "lap": leader_lap,
             "drivers": frame_data
         })
     

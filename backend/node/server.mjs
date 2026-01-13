@@ -94,8 +94,8 @@ app.post('/api/fetch', async (req, res) => {
     console.log(`Executing: ${command}`);
 
     const { stdout, stderr } = await execPromise(command, {
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
-      timeout: 300000, // 5 minutes timeout
+      maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large outputs
+      timeout: 600000, // 10 minutes timeout (processing 20 drivers with full telemetry takes time)
     });
 
     // Check for errors in stderr (but allow warnings)

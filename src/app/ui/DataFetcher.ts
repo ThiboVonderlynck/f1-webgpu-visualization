@@ -113,7 +113,7 @@ export class DataFetcher {
                   <option value="${race.round}" ${race.round === this.selectedRound ? 'selected' : ''}>
                     Round ${race.round} - ${race.name}
                   </option>
-                `
+              `
                 )
                 .join('')}
             </select>

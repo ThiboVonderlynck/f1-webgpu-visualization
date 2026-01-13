@@ -4,16 +4,18 @@ export interface TelemetryFrame {
   frameNumber?: number;
   drivers: {
     [code: string]: {
-      x: number; // X position (meters)
-      y: number; // Y position (meters)
-      lap: number; // Driver's lap
-      dist: number; // Distance traveled
-      speed: number; // Speed (km/h)
-      gear: number; // Current gear
-      drs: number; // DRS status
-      throttle: number; // Throttle %
-      brake: number; // Brake %
-      position: number; // Race position
+      x: number;
+      y: number;
+      lap: number;
+      dist: number;
+      rel_dist: number;
+      speed: number;
+      gear: number;
+      drs: number;
+      throttle: number;
+      brake: number;
+      position: number;
+      tyre: number;
     };
   };
 }
