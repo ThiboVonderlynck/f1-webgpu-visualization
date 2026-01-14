@@ -43,7 +43,8 @@ export class TrackRenderer {
     this.clear();
     this.renderTrackSurface(trackData);
     this.renderBoundaries(trackData.boundaries);
-    console.log(`✓ Track rendered: ${trackData.centerline.x.length} points`);
+    this.renderDRSZones(trackData);
+    console.log(`✓ Track rendered: ${trackData.centerline.x.length} points, ${trackData.drs_zones?.length || 0} DRS zones`);
   }
 
   private renderCenterline(centerline: { x: number[]; y: number[] }): void {
@@ -102,6 +103,9 @@ export class TrackRenderer {
       roughness: 0.6,
       metalness: 0.4,
       side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -111,56 +115,78 @@ export class TrackRenderer {
   }
 
   private renderBoundaries(boundaries: { inner: { x: number[]; y: number[] }; outer: { x: number[]; y: number[] } }): void {
-    this.renderBoundaryLine(boundaries.inner, 0xffffff, 'inner-boundary');
-    this.renderBoundaryLine(boundaries.outer, 0xffffff, 'outer-boundary');
+    // Reference: track_color = (150, 150, 150) - grey for normal track
+    this.renderBoundaryTube(boundaries.inner, 0x969696, 'inner-boundary', 15);
+    this.renderBoundaryTube(boundaries.outer, 0x969696, 'outer-boundary', 15);
   }
 
-  private renderBoundaryLine(boundary: { x: number[]; y: number[] }, color: number, name: string): void {
+  private renderBoundaryTube(boundary: { x: number[]; y: number[] }, color: number, name: string, radius: number): void {
     const points: THREE.Vector3[] = [];
-    for (let i = 0; i < boundary.x.length; i++) {
-      points.push(new THREE.Vector3(boundary.x[i], 0.5, boundary.y[i]));
+    // Sample every nth point to reduce geometry complexity
+    const step = Math.max(1, Math.floor(boundary.x.length / 500));
+    for (let i = 0; i < boundary.x.length; i += step) {
+      points.push(new THREE.Vector3(boundary.x[i], 10.0, boundary.y[i]));
+    }
+    // Ensure we include the last point
+    if (points.length > 0) {
+      const lastIdx = boundary.x.length - 1;
+      points.push(new THREE.Vector3(boundary.x[lastIdx], 3.0, boundary.y[lastIdx]));
     }
 
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
+    if (points.length < 2) return;
+
+    const curve = new THREE.CatmullRomCurve3(points);
+    const tubeGeometry = new THREE.TubeGeometry(curve, points.length * 2, radius, 8, false);
+    const material = new THREE.MeshBasicMaterial({ 
       color,
-      linewidth: 6,
+      depthWrite: true,
     });
 
-    const line = new THREE.Line(geometry, material);
-    line.name = name;
-    this.trackGroup.add(line);
+    const mesh = new THREE.Mesh(tubeGeometry, material);
+    mesh.name = name;
+    this.trackGroup.add(mesh);
   }
 
   private renderDRSZones(trackData: TrackData): void {
-    // Render DRS zones as colored sections on track
-    // Reference: race_replay.py uses DRS zones from telemetry
+    // Render DRS zones as bright green tubes on OUTER track edge
+    // Reference: drs_color = (0, 255, 0) with line width 6
+    if (!trackData.drs_zones || trackData.drs_zones.length === 0) {
+      return;
+    }
+
+    const outer = trackData.boundaries.outer;
+    const drsRadius = 25;
+    const drsMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0x00ff00, // Bright green (0, 255, 0) - exactly like reference
+    });
+
     trackData.drs_zones.forEach((zone, index) => {
       const startIdx = zone.start.index;
       const endIdx = zone.end.index;
 
-      // Create a colored strip for DRS zone
+      // Create green tube on OUTER boundary (thicker than track lines)
       const points: THREE.Vector3[] = [];
-      for (let i = startIdx; i <= Math.min(endIdx, trackData.centerline.x.length - 1); i++) {
-        points.push(new THREE.Vector3(trackData.centerline.x[i], 0.3, trackData.centerline.y[i]));
+      const step = Math.max(1, Math.floor((endIdx - startIdx) / 100));
+      for (let i = startIdx; i <= Math.min(endIdx, outer.x.length - 1); i += step) {
+        // Slightly higher than boundary to overlay on top
+        points.push(new THREE.Vector3(outer.x[i], 12.0, outer.y[i]));
+      }
+      // Ensure we include the end point
+      if (endIdx < outer.x.length) {
+        points.push(new THREE.Vector3(outer.x[endIdx], 12.0, outer.y[endIdx]));
       }
 
       if (points.length > 1) {
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({
-          color: 0x00ff00, // Green for DRS
-          linewidth: 5,
-          transparent: true,
-          opacity: 0.7,
-        });
-
-        const line = new THREE.Line(geometry, material);
-        line.name = `drs-zone-${index}`;
-        this.trackGroup.add(line);
+        const curve = new THREE.CatmullRomCurve3(points);
+        const tubeGeometry = new THREE.TubeGeometry(curve, points.length * 2, drsRadius, 8, false);
+        
+        const mesh = new THREE.Mesh(tubeGeometry, drsMaterial);
+        mesh.name = `drs-zone-${index}`;
+        this.trackGroup.add(mesh);
       }
     });
 
-    console.log(`✓ Rendered ${trackData.drs_zones.length} DRS zones`);
+    console.log(`✓ Rendered ${trackData.drs_zones.length} DRS zones (green on outer edge)`);
   }
 
   getBounds(): { min: THREE.Vector3; max: THREE.Vector3 } | null {
