@@ -1,55 +1,41 @@
 /**
- * Maps driver codes to their respective team logo filenames
- * Based on 2024 F1 season driver lineup
+ * Maps driver codes to their respective teams dynamically based on loaded race data
  */
 
-const DRIVER_TO_TEAM: { [driverCode: string]: string } = {
-  // Red Bull Racing
-  VER: 'Redbull.svg',
-  PER: 'Redbull.svg',
+// Dynamic team mapping loaded from API
+let DRIVER_TO_TEAM: { [driverCode: string]: string } = {};
 
-  // Mercedes-AMG Petronas
-  HAM: 'Mercedes.svg',
-  RUS: 'Mercedes.svg',
-  ANT: 'Mercedes.svg', // Antonelli
+/**
+ * Set the driver team mapping from loaded race data
+ * @param teamData - Team data from API { "VER": { "name": "Red Bull Racing", "key": "redbull" }, ... }
+ */
+export function setDriverTeams(teamData: { [driverCode: string]: { name: string; key: string } }): void {
+  DRIVER_TO_TEAM = {};
+  for (const [driverCode, info] of Object.entries(teamData)) {
+    DRIVER_TO_TEAM[driverCode] =`${capitalizeTeamKey(info.key)}.svg`;
+  }
+}
 
-  // Scuderia Ferrari
-  LEC: 'Ferrari.svg',
-  SAI: 'Ferrari.svg',
-
-  // McLaren F1 Team
-  NOR: 'McLaren.svg',
-  PIA: 'McLaren.svg',
-
-  // Aston Martin Aramco
-  ALO: 'AstonMartin.svg',
-  STR: 'AstonMartin.svg',
-
-  // BWT Alpine F1 Team
-  GAS: 'Alpine.svg',
-  OCO: 'Alpine.svg',
-
-  // Williams Racing
-  ALB: 'Williams.svg',
-  SAR: 'Williams.svg',
-  COL: 'Williams.svg', // Colapinto
-
-  // Visa Cash App RB F1 Team (Racing Bulls)
-  TSU: 'RacingBulls.svg',
-  RIC: 'RacingBulls.svg',
-  LAW: 'RacingBulls.svg', // Lawson
-  HAD: 'RacingBulls.svg', // Hadjar
-
-  // Stake F1 Team Kick Sauber
-  BOT: 'KickSauber.svg',
-  ZHO: 'KickSauber.svg',
-  BOR: 'KickSauber.svg', // Bortoleto
-
-  // MoneyGram Haas F1 Team
-  MAG: 'Haas.svg',
-  HUL: 'Haas.svg',
-  BEA: 'Haas.svg', // Bearman
-};
+/**
+ * Capitalize team key for filename (e.g., "redbull" -> "Redbull")
+ */
+function capitalizeTeamKey(teamKey: string): string {
+  // Handle special cases
+  const specialCases: { [key: string]: string } = {
+    'redbull': 'Redbull',
+    'mercedes': 'Mercedes',
+    'ferrari': 'Ferrari',
+    'mclaren': 'McLaren',
+    'astonmartin': 'AstonMartin',
+    'alpine': 'Alpine',
+    'williams': 'Williams',
+    'racingbulls': 'RacingBulls',
+    'kicksauber': 'KickSauber',
+    'haas': 'Haas',
+  };
+  
+  return specialCases[teamKey] || teamKey.charAt(0).toUpperCase() + teamKey.slice(1);
+}
 
 /**
  * Get the team logo filename for a given driver code

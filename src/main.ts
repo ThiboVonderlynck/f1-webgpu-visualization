@@ -4,6 +4,7 @@ import { CircuitManager } from './app/circuit';
 import { DataFetcher } from './app/ui/DataFetcher.js';
 import { Leaderboard } from './app/ui/Leaderboard.js';
 import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './app/playback';
+import { setDriverTeams } from './app/ui/teamMapping.js';
 import type { TrackData } from './app/circuit/trackRenderer.js';
 import './styles/dataFetcher.css';
 import './styles/playbackUI.css';
@@ -57,6 +58,12 @@ async function initVisualization(trackData: TrackData) {
     carRenderer.initializeCars(metadata);
     leaderboard.setDriverColors(metadata.driverColors);
     leaderboard.setTotalLaps(metadata.totalLaps || 0);
+    
+    // Set dynamic driver-to-team mapping
+    if (metadata.driverTeams) {
+      setDriverTeams(metadata.driverTeams);
+      leaderboard.resetEntries(); // Force re-render with team logos
+    }
   });
 
   wsClient.onFrame((frame) => {

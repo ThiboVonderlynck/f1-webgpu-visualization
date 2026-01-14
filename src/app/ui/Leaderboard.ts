@@ -9,9 +9,19 @@ interface LeaderboardEntry {
   lap: number;
   tyre: number;
   drs: number;
+  speed: number;
   isOut: boolean;
+  pitState: PitState;
   gap?: string;
 }
+
+interface ProjectionResult {
+  distanceAlong: number;  // Distance along the track (progress)
+  distanceFrom: number;   // Distance from the track centerline
+}
+
+// Pit lane state machine
+type PitState = 'NONE' | 'IN_PIT' | 'PIT_EXIT';
 
 export class Leaderboard {
   private container: HTMLElement;
@@ -20,6 +30,10 @@ export class Leaderboard {
   private totalLaps: number = 0;
   private currentLap: number = 0;
   private entryElements: Map<string, HTMLElement> = new Map();
+  
+  // Pit state tracking per driver
+  private driverPitState: Map<string, PitState> = new Map();
+  private driverHadPitStop: Map<string, boolean> = new Map(); // Tracks if driver stopped (speed ~0)
 
   // Reference polyline for position projection
   private _ref_xs: Float32Array = new Float32Array(0);
@@ -83,9 +97,9 @@ export class Leaderboard {
     return fp[fp.length - 1];
   }
 
-  private _projectToReference(x: number, y: number): number {
+  private _projectToReference(x: number, y: number): ProjectionResult {
     if (this._ref_total_length === 0.0) {
-      return 0.0;
+      return { distanceAlong: 0.0, distanceFrom: 0.0 };
     }
 
     // Find nearest point on track
@@ -102,6 +116,9 @@ export class Leaderboard {
     }
 
     // Project onto adjacent segment for better accuracy
+    let distanceAlong = this._ref_cumdist[idx];
+    let distanceFrom = Math.sqrt(min_d2);
+
     if (idx < this._ref_xs.length - 1) {
       const x1 = this._ref_xs[idx];
       const y1 = this._ref_ys[idx];
@@ -116,12 +133,84 @@ export class Leaderboard {
         t = Math.max(0.0, Math.min(1.0, t));
         const proj_x = x1 + t * vx;
         const proj_y = y1 + t * vy;
+        
+        // Calculate distance along track
         const seg_dist = Math.sqrt((proj_x - x1) ** 2 + (proj_y - y1) ** 2);
-        return this._ref_cumdist[idx] + seg_dist;
+        distanceAlong = this._ref_cumdist[idx] + seg_dist;
+        
+        // Calculate perpendicular distance from track centerline
+        distanceFrom = Math.sqrt((x - proj_x) ** 2 + (y - proj_y) ** 2);
       }
     }
 
-    return this._ref_cumdist[idx];
+    return { distanceAlong, distanceFrom };
+  }
+
+  // Pit lane detection constants
+  // Distance: Pit lane is typically 25-30m from racing line, grid positions only 5-15m
+  // Speed: Cars in pit lane move at 60-80 km/h
+  private static readonly PIT_LANE_DISTANCE_THRESHOLD = 25; // meters from racing line
+  private static readonly PIT_LANE_SPEED_MAX = 85; // km/h (pit lane limit + buffer)
+  private static readonly PIT_LANE_SPEED_MIN = 30; // km/h (must be moving, not on grid)
+  private static readonly PIT_STOP_SPEED = 5; // km/h (considered stationary for pit stop)
+  private static readonly PIT_EXIT_SPEED_THRESHOLD = 90; // km/h (accelerating out of pit)
+
+  /**
+   * State machine for pit lane detection:
+   * NONE → IN_PIT: Car enters pit lane (far from centerline, pit lane speed)
+   * IN_PIT → tracks when speed drops to ~0 (pit stop happening)
+   * After pit stop → PIT_EXIT: Car starts moving again at pit lane speed
+   * PIT_EXIT → NONE: Car accelerates above pit lane speed (rejoining track)
+   */
+  private updateDriverPitState(code: string, distanceFromTrack: number, speed: number): PitState {
+    const currentState = this.driverPitState.get(code) || 'NONE';
+    const hadPitStop = this.driverHadPitStop.get(code) || false;
+    
+    const isInPitLaneArea = distanceFromTrack > Leaderboard.PIT_LANE_DISTANCE_THRESHOLD;
+    const isAtPitLaneSpeed = speed < Leaderboard.PIT_LANE_SPEED_MAX && speed > Leaderboard.PIT_LANE_SPEED_MIN;
+    const isStopped = speed < Leaderboard.PIT_STOP_SPEED;
+    const isAccelerating = speed > Leaderboard.PIT_EXIT_SPEED_THRESHOLD;
+    
+    let newState: PitState = currentState;
+    
+    switch (currentState) {
+      case 'NONE':
+        // Enter pit lane: far from track AND at pit lane speed
+        if (isInPitLaneArea && isAtPitLaneSpeed) {
+          newState = 'IN_PIT';
+          this.driverHadPitStop.set(code, false);
+        }
+        break;
+        
+      case 'IN_PIT':
+        // Track if car has stopped (pit stop is happening)
+        if (isStopped) {
+          this.driverHadPitStop.set(code, true);
+        }
+        
+        // Transition to PIT_EXIT after pit stop and car starts moving again
+        if (hadPitStop && isAtPitLaneSpeed) {
+          newState = 'PIT_EXIT';
+        }
+        
+        // If car somehow left pit area without stopping (aborted pit?)
+        if (!isInPitLaneArea && !isStopped) {
+          newState = 'NONE';
+          this.driverHadPitStop.set(code, false);
+        }
+        break;
+        
+      case 'PIT_EXIT':
+        // Exit pit lane: car accelerates above pit lane speed
+        if (isAccelerating || !isInPitLaneArea) {
+          newState = 'NONE';
+          this.driverHadPitStop.set(code, false);
+        }
+        break;
+    }
+    
+    this.driverPitState.set(code, newState);
+    return newState;
   }
 
   setDriverColors(colors: { [code: string]: [number, number, number] }): void {
@@ -133,6 +222,15 @@ export class Leaderboard {
     this.updateLapCounter();
   }
 
+  /**
+   * Reset all entry elements to force re-render with updated team data
+   */
+  resetEntries(): void {
+    for (const element of this.entryElements.values()) {
+      delete element.dataset.initialized;
+    }
+  }
+
   private updateLapCounter(): void {
     const lapCounterEl = this.container.querySelector('.lap-counter');
     if (lapCounterEl) {
@@ -141,7 +239,7 @@ export class Leaderboard {
   }
 
   updateFromFrame(frame: TelemetryFrame): void {
-    const driver_progress: { [code: string]: number } = {};
+    const driver_progress: { [code: string]: { progress_m: number; distanceFrom: number } } = {};
 
     for (const [code, pos] of Object.entries(frame.drivers)) {
       let lap: number;
@@ -151,24 +249,28 @@ export class Leaderboard {
         lap = 1;
       }
 
-      const projected_m = this._projectToReference(pos.x || 0.0, pos.y || 0.0);
+      const projection = this._projectToReference(pos.x || 0.0, pos.y || 0.0);
 
       // Fix for start-line wrap-around
       const telemetry_dist = pos.dist || 0.0;
-      let corrected_projected_m = projected_m;
-      if (lap === 1 && telemetry_dist < this._ref_total_length * 0.5 && projected_m > this._ref_total_length * 0.5) {
-        corrected_projected_m = projected_m - this._ref_total_length;
+      let corrected_projected_m = projection.distanceAlong;
+      if (lap === 1 && telemetry_dist < this._ref_total_length * 0.5 && projection.distanceAlong > this._ref_total_length * 0.5) {
+        corrected_projected_m = projection.distanceAlong - this._ref_total_length;
       }
 
       const progress_m = (Math.max(lap, 1) - 1) * this._ref_total_length + corrected_projected_m;
 
-      driver_progress[code] = progress_m;
+      driver_progress[code] = { progress_m, distanceFrom: projection.distanceFrom };
     }
 
     const entries: LeaderboardEntry[] = [];
     for (const [code, pos] of Object.entries(frame.drivers)) {
       const color = this.driverColors[code] || [255, 255, 255];
-      const progress_m = driver_progress[code];
+      const { progress_m, distanceFrom } = driver_progress[code];
+      const speed = pos.speed || 0;
+      
+      // Update pit state machine for this driver
+      const pitState = this.updateDriverPitState(code, distanceFrom, speed);
 
       entries.push({
         code,
@@ -178,7 +280,9 @@ export class Leaderboard {
         lap: pos.lap,
         tyre: pos.tyre,
         drs: pos.drs,
+        speed: speed,
         isOut: pos.rel_dist === 1,
+        pitState: pitState,
       });
     }
 
@@ -246,7 +350,8 @@ export class Leaderboard {
 
       entryEl.className = `leaderboard-entry ${entry.isOut ? 'out' : ''}`;
       
-      entryEl.innerHTML = `
+      // Build the expected innerHTML
+      const expectedHTML = `
         <div class="driver-left">
           <div class="position">${index + 1}</div>
           <span class="team-color-line ${teamColorClass}"></span>
@@ -257,6 +362,10 @@ export class Leaderboard {
           </div>
         </div>
         <div class="driver-right">
+          <span class="pit-label" 
+                data-state="${entry.pitState}"
+                style="color: rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})">
+          </span>
           <div class="indicators">
             <div class="drs-indicator ${isDrsActive ? 'active' : ''}" 
                  title="DRS ${isDrsActive ? 'Active' : 'Inactive'}">
@@ -268,6 +377,84 @@ export class Leaderboard {
           </div>
         </div>
       `;
+      
+      // Only update innerHTML if it's the first time or structure changed
+      if (!entryEl.dataset.initialized) {
+        entryEl.innerHTML = expectedHTML;
+        entryEl.dataset.initialized = 'true';
+      }
+      
+      // Update dynamic elements separately to preserve transitions
+      const pitLabel = entryEl.querySelector('.pit-label') as HTMLElement;
+      if (pitLabel) {
+        const previousState = pitLabel.dataset.state as PitState || 'NONE';
+        const currentState = entry.pitState;
+        
+        // Update color
+        pitLabel.style.color = `rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})`;
+        
+        // Handle state transitions with fade effects
+        if (previousState !== currentState) {
+          // State has changed - need to handle transition
+          
+          if (currentState === 'NONE') {
+            // Fading out (PIT_EXIT → NONE or IN_PIT → NONE)
+            pitLabel.classList.remove('visible');
+            // Clear text after fade completes
+            setTimeout(() => {
+              if (pitLabel.dataset.state === 'NONE') {
+                pitLabel.textContent = '';
+              }
+            }, 300); // Match CSS transition duration
+          } else if (previousState === 'NONE') {
+            // Fading in (NONE → IN_PIT or NONE → PIT_EXIT)
+            const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
+            pitLabel.textContent = newText;
+            // Trigger reflow to ensure transition works
+            pitLabel.offsetHeight;
+            pitLabel.classList.add('visible');
+          } else {
+            // Text is changing (IN_PIT → PIT_EXIT or PIT_EXIT → IN_PIT)
+            // Fade out, change text, fade in
+            pitLabel.classList.remove('visible');
+            setTimeout(() => {
+              const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
+              pitLabel.textContent = newText;
+              pitLabel.dataset.state = currentState;
+              // Trigger reflow
+              pitLabel.offsetHeight;
+              pitLabel.classList.add('visible');
+            }, 300); // Match CSS transition duration
+          }
+        }
+        
+        // Update state tracking
+        pitLabel.dataset.state = currentState;
+      }
+      
+      // Update position number
+      const positionEl = entryEl.querySelector('.position');
+      if (positionEl) {
+        positionEl.textContent = `${index + 1}`;
+      }
+      
+      // Update DRS indicator
+      const drsIndicator = entryEl.querySelector('.drs-indicator');
+      if (drsIndicator) {
+        if (isDrsActive) {
+          drsIndicator.classList.add('active');
+        } else {
+          drsIndicator.classList.remove('active');
+        }
+      }
+      
+      // Update tyre indicator
+      const tyreIndicator = entryEl.querySelector('.tyre-indicator') as HTMLImageElement;
+      if (tyreIndicator && tyreIndicator.src !== tyreImagePath) {
+        tyreIndicator.src = tyreImagePath;
+        tyreIndicator.alt = tyreName;
+        tyreIndicator.title = tyreName;
+      }
     });
 
     const currentCodes = new Set(this.entries.map(e => e.code));

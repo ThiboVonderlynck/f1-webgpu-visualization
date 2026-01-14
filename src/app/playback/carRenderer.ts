@@ -16,22 +16,20 @@ export class CarRenderer {
     this.clearCars();
 
     Object.entries(metadata.driverColors).forEach(([code, rgb]) => {
-      const color = new THREE.Color().setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+      // Convert RGB (0-255) to hex color like DRS zones for consistent brightness
+      const hexColor = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+      const color = new THREE.Color(hexColor);
       this.driverColors.set(code, color);
 
       const geometry = new THREE.SphereGeometry(50, 32, 32);
-      const material = new THREE.MeshStandardMaterial({
-        color: color,
-        emissive: color,
-        emissiveIntensity: 1.0,
-        metalness: 0.9,
-        roughness: 0.05,
+      const material = new THREE.MeshBasicMaterial({
+        color: hexColor, // Use hex directly like DRS
       });
 
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `car-${code}`;
       mesh.position.y = 10;
-      mesh.castShadow = true;
+      mesh.castShadow = false; // BasicMaterial doesn't cast shadows
 
       this.cars.set(code, mesh);
       this.scene.add(mesh);

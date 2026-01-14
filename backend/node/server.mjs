@@ -312,6 +312,7 @@ app.post('/api/load', async (req, res) => {
 
     const frames = data.telemetry.frames;
     const driverColors = data.driver_colors || {};
+    const driverTeams = data.driver_teams || {};
     const totalLaps = data.total_laps || 0;
     const track = data.track || null; // Extract track data from telemetry JSON
 
@@ -325,6 +326,7 @@ app.post('/api/load', async (req, res) => {
     global.currentTelemetry = {
       frames,
       driverColors,
+      driverTeams,
       totalLaps,
       track, // Include track data in global state
       metadata: { year, round, sessionType },
@@ -372,6 +374,7 @@ wss.on('connection', (ws) => {
         data: {
           totalFrames: global.currentTelemetry.frames.length,
           driverColors: global.currentTelemetry.driverColors,
+          driverTeams: global.currentTelemetry.driverTeams,
           totalLaps: global.currentTelemetry.totalLaps,
         },
       })

@@ -24,6 +24,7 @@ export interface TelemetryMetadata {
   totalFrames: number;
   driverColors: { [code: string]: [number, number, number] };
   totalLaps: number;
+  driverTeams?: { [code: string]: { name: string; key: string } };
 }
 
 export class WebSocketClient {

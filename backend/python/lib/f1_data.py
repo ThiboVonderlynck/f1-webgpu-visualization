@@ -147,20 +147,77 @@ def load_session(year, round_number, session_type='R'):
         raise
 
 def get_driver_colors(session):
-    """Get driver colors (reference solution pattern)"""
+    """Get driver colors with official F1 2024 team colors"""
+    # Official F1 2024 team colors
+    TEAM_COLORS = {
+        'Mercedes': '#00D7B6',
+        'Red Bull Racing': '#4781D7',
+        'Ferrari': '#ED1131',
+        'McLaren': '#F47600',
+        'Alpine': '#00A1E8',
+        'AlphaTauri': '#6C98FF',  # Racing Bulls (was AlphaTauri)
+        'RB': '#6C98FF',  # Racing Bulls
+        'Aston Martin': '#229971',
+        'Williams': '#1868DB',
+        'Sauber': '#01C00E',  # Kick Sauber
+        'Kick Sauber': '#01C00E',
+        'Haas F1 Team': '#9C9FA2',
+    }
+    
+    # Map team names to normalized team keys for frontend
+    TEAM_NAME_TO_KEY = {
+        'Mercedes': 'mercedes',
+        'Red Bull Racing': 'redbull',
+        'Ferrari': 'ferrari',
+        'McLaren': 'mclaren',
+        'Alpine': 'alpine',
+        'AlphaTauri': 'racingbulls',
+        'RB': 'racingbulls',
+        'Aston Martin': 'astonmartin',
+        'Williams': 'williams',
+        'Sauber': 'kicksauber',
+        'Kick Sauber': 'kicksauber',
+        'Haas F1 Team': 'haas',
+    }
+    
     try:
-        color_mapping = fastf1.plotting.get_driver_color_mapping(session)
-        
-        # Convert hex to RGB tuples
+        drivers = session.drivers
         rgb_colors = {}
-        for driver, hex_color in color_mapping.items():
+        team_info = {}
+        
+        for driver_no in drivers:
+            driver_info = session.get_driver(driver_no)
+            driver_code = driver_info['Abbreviation']
+            team_name = driver_info['TeamName']
+            
+            # Get team color, fallback to FastF1 if team not found
+            hex_color = TEAM_COLORS.get(team_name)
+            
+            if not hex_color:
+                # Fallback to FastF1 colors
+                try:
+                    color_mapping = fastf1.plotting.get_driver_color_mapping(session)
+                    hex_color = color_mapping.get(driver_code, '#FFFFFF')
+                except:
+                    hex_color = '#FFFFFF'
+            
+            # Convert hex to RGB tuple
             hex_color = hex_color.lstrip('#')
             rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-            rgb_colors[driver] = rgb
-        return rgb_colors
+            rgb_colors[driver_code] = rgb
+            
+            # Store team info for frontend
+            team_key = TEAM_NAME_TO_KEY.get(team_name, team_name.lower().replace(' ', ''))
+            team_info[driver_code] = {
+                'name': team_name,
+                'key': team_key
+            }
+        
+        return rgb_colors, team_info
     except Exception as e:
         print(f"Error getting driver colors: {e}")
-        return {}
+        return {}, {}
+
 
 def get_circuit_rotation(session):
     """Get circuit rotation from FastF1"""
@@ -314,12 +371,16 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     
     print(f"Completed telemetry extraction: {len(frames)} frames")
     
+    # Get driver colors and team info
+    driver_colors, team_info = get_driver_colors(session)
+    
     # Prepare output
     result = {
         "telemetry": {
             "frames": frames
         },
-        "driver_colors": get_driver_colors(session),
+        "driver_colors": driver_colors,
+        "driver_teams": team_info,
         "total_laps": int(max_lap_number),
     }
     

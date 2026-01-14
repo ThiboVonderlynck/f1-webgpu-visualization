@@ -1,44 +1,44 @@
 @import url("https://fonts.googleapis.com/css?family=Orbitron:300,400,500,700");
 
-/* Team Colors */
+/* Team Colors - Official F1 2024 */
 .team-color-redbull {
-  background: #1e41ff;
+  background: #4781D7;
 }
 
 .team-color-mercedes {
-  background: #00d2be;
+  background: #00D7B6;
 }
 
 .team-color-ferrari {
-  background: #dc0000;
+  background: #ED1131;
 }
 
 .team-color-mclaren {
-  background: #ff8700;
+  background: #F47600;
 }
 
 .team-color-astonmartin {
-  background: #006f62;
+  background: #229971;
 }
 
 .team-color-alpine {
-  background: #0090ff;
+  background: #00A1E8;
 }
 
 .team-color-williams {
-  background: #005aff;
+  background: #1868DB;
 }
 
 .team-color-racingbulls {
-  background: #469bff;
+  background: #6C98FF;
 }
 
 .team-color-kicksauber {
-  background: #00e701;
+  background: #01C00E;
 }
 
 .team-color-haas {
-  background: #b6babd;
+  background: #9C9FA2;
 }
 
 .leaderboard {
@@ -189,6 +189,23 @@
   padding: 2px 5px;
   border-radius: 3px;
   font-weight: normal;
+}
+
+.leaderboard-entry .pit-label {
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-right: 4px;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  pointer-events: none;
+}
+
+.leaderboard-entry .pit-label.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .driver-right {
