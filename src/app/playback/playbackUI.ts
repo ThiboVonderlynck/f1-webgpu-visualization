@@ -84,6 +84,15 @@ export class PlaybackUI {
               <text x="50%" y="70%" text-anchor="middle" font-size="16" font-weight="bold">+</text>
             </svg>
           </button>
+
+          <div class="mode-selector">
+            <label for="streaming-mode" class="mode-label">Data Mode:</label>
+            <select id="streaming-mode" class="mode-dropdown" title="Streaming Mode (for research)">
+              <option value="replay">Replay (25 FPS)</option>
+              <option value="live">Live Sim (3-4 Hz)</option>
+              <option value="polling">REST Polling (3s)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -153,6 +162,14 @@ export class PlaybackUI {
       const frameNumber = Math.floor((value / 100) * state.totalFrames);
       this.controller.seekToFrame(frameNumber);
       this.wsClient.seek(frameNumber);
+    });
+
+    // Streaming mode selector (for research demonstration)
+    const modeDropdown = this.container.querySelector('#streaming-mode') as HTMLSelectElement;
+    modeDropdown?.addEventListener('change', (e) => {
+      const mode = (e.target as HTMLSelectElement).value;
+      console.log(`Switching streaming mode to: ${mode}`);
+      this.wsClient.setMode(mode);
     });
 
     // Keyboard shortcuts

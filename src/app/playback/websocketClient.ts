@@ -37,6 +37,8 @@ export class WebSocketClient {
   private onMetadataCallback?: (metadata: TelemetryMetadata) => void;
   private onConnectedCallback?: () => void;
   private onDisconnectedCallback?: () => void;
+  private onModeChangeCallback?: (mode: string, config: any) => void;
+  private onModesReceivedCallback?: (modes: any, current: string) => void;
 
   constructor(url: string = 'ws://localhost:3001') {
     this.url = url;
@@ -96,6 +98,16 @@ export class WebSocketClient {
         console.log('Status:', message.message);
         break;
 
+      case 'modeChanged':
+        console.log(`🔄 Streaming mode changed to: ${message.config?.name}`);
+        this.onModeChangeCallback?.(message.mode, message.config);
+        break;
+
+      case 'modes':
+        console.log('📋 Available modes:', message.modes);
+        this.onModesReceivedCallback?.(message.modes, message.current);
+        break;
+
       case 'error':
         console.error('Server error:', message.message);
         break;
@@ -133,6 +145,15 @@ export class WebSocketClient {
     this.sendCommand('speed', speed);
   }
 
+  // Streaming mode controls (for research simulation)
+  setMode(mode: string): void {
+    this.sendCommand('mode', mode);
+  }
+
+  getModes(): void {
+    this.sendCommand('getModes');
+  }
+
   onFrame(callback: (frame: TelemetryFrame) => void): void {
     this.onFrameCallback = callback;
   }
@@ -147,6 +168,14 @@ export class WebSocketClient {
 
   onDisconnected(callback: () => void): void {
     this.onDisconnectedCallback = callback;
+  }
+
+  onModeChange(callback: (mode: string, config: any) => void): void {
+    this.onModeChangeCallback = callback;
+  }
+
+  onModesReceived(callback: (modes: any, current: string) => void): void {
+    this.onModesReceivedCallback = callback;
   }
 
   private attemptReconnect(): void {

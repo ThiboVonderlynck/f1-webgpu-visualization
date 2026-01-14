@@ -47,25 +47,6 @@ export class TrackRenderer {
     console.log(`✓ Track rendered: ${trackData.centerline.x.length} points, ${trackData.drs_zones?.length || 0} DRS zones`);
   }
 
-  private renderCenterline(centerline: { x: number[]; y: number[] }): void {
-    const points: THREE.Vector3[] = [];
-    for (let i = 0; i < centerline.x.length; i++) {
-      points.push(new THREE.Vector3(centerline.x[i], 0.1, centerline.y[i]));
-    }
-
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
-      color: 0xffff00,
-      transparent: true,
-      opacity: 0.3,
-      linewidth: 2,
-    });
-
-    const line = new THREE.Line(geometry, material);
-    line.name = 'centerline';
-    this.trackGroup.add(line);
-  }
-
   private renderTrackSurface(trackData: TrackData): void {
     const { inner, outer } = trackData.boundaries;
     const vertices: number[] = [];

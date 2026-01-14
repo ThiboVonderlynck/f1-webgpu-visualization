@@ -28,6 +28,26 @@ app.use(express.json());
 const PORT = 3001;
 
 // ============================================================================
+// Streaming Modes (for research: simulating different data sources)
+// ============================================================================
+const STREAMING_MODES = {
+  replay: {
+    name: 'Replay (25 FPS)',
+    interval: 40,      // 1000/25 = 40ms
+  },
+  live: {
+    name: 'Live Simulation (3-4 Hz)',
+    interval: 300,     // ~3.3 Hz like FastF1/OpenF1 WebSocket
+  },
+  polling: {
+    name: 'REST Polling (3s)',
+    interval: 3000,    // Every 3 seconds
+  }
+};
+
+let currentStreamingMode = 'replay'; // Default mode
+
+// ============================================================================
 // REST API Endpoints (Unified - No Flask dependency required)
 // ============================================================================
 
@@ -439,6 +459,25 @@ function handleCommand(command, value, ws) {
       }
       break;
 
+    case 'mode':
+      if (value && STREAMING_MODES[value]) {
+        setStreamingMode(value, ws);
+      } else {
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: `Unknown mode: ${value}. Available: ${Object.keys(STREAMING_MODES).join(', ')}`
+        }));
+      }
+      break;
+
+    case 'getModes':
+      ws.send(JSON.stringify({
+        type: 'modes',
+        modes: STREAMING_MODES,
+        current: currentStreamingMode
+      }));
+      break;
+
     default:
       ws.send(
         JSON.stringify({
@@ -453,11 +492,31 @@ function startPlayback() {
   if (playbackState.isPlaying) return;
 
   playbackState.isPlaying = true;
-  console.log('Playback started');
+  
+  const modeConfig = STREAMING_MODES[currentStreamingMode];
+  const sendInterval = modeConfig.interval / playbackState.speed;
+  const FPS = 25;
+  const tickInterval = 1000 / FPS; // 40ms for 25 FPS
+  
+  console.log(`Playback started [Mode: ${modeConfig.name}]`);
+  console.log(`  └── Background ticker: ${tickInterval}ms (25 FPS real-time)`);
+  console.log(`  └── Send interval: ${sendInterval}ms`);
 
-  const fps = 25; // Reference: FPS = 25
-  const frameInterval = 1000 / fps / playbackState.speed;
+  // BACKGROUND TICKER: Always runs at 25 FPS (real-time simulation)
+  // This keeps the "race clock" ticking regardless of send mode
+  playbackState.tickerInterval = setInterval(() => {
+    if (!global.currentTelemetry) return;
+    
+    playbackState.currentFrame++;
+    
+    // Loop back to start
+    if (playbackState.currentFrame >= global.currentTelemetry.frames.length) {
+      playbackState.currentFrame = 0;
+    }
+  }, tickInterval / playbackState.speed);
 
+  // SEND INTERVAL: How often we push data to clients (mode-dependent)
+  // Just sends whatever the current frame is at that moment
   playbackState.interval = setInterval(() => {
     if (!global.currentTelemetry) {
       stopPlayback();
@@ -466,35 +525,36 @@ function startPlayback() {
 
     const frame = global.currentTelemetry.frames[playbackState.currentFrame];
 
-    // Broadcast to all connected clients
+    // Broadcast current frame to all connected clients
     wss.clients.forEach((client) => {
       if (client.readyState === 1) {
-        // WebSocket.OPEN
         client.send(
           JSON.stringify({
             type: 'frame',
             frameNumber: playbackState.currentFrame,
             data: frame,
+            mode: currentStreamingMode,
+            interval: modeConfig.interval,
           })
         );
       }
     });
-
-    playbackState.currentFrame++;
-
-    // Loop back to start
-    if (playbackState.currentFrame >= global.currentTelemetry.frames.length) {
-      playbackState.currentFrame = 0;
-    }
-  }, frameInterval);
+  }, sendInterval);
 }
 
 function pausePlayback() {
   playbackState.isPlaying = false;
+  
+  // Clear both intervals
   if (playbackState.interval) {
     clearInterval(playbackState.interval);
     playbackState.interval = null;
   }
+  if (playbackState.tickerInterval) {
+    clearInterval(playbackState.tickerInterval);
+    playbackState.tickerInterval = null;
+  }
+  
   console.log('Playback paused');
 }
 
@@ -510,12 +570,42 @@ function seekToFrame(frameNumber) {
 }
 
 function setPlaybackSpeed(speed) {
-  playbackState.speed = Math.max(0.1, Math.min(speed, 5.0));
+  playbackState.speed = Math.max(0.1, Math.min(speed, 16.0)); // Support up to 16x
   console.log(`Playback speed set to ${playbackState.speed}x`);
 
   // Restart playback with new speed if playing
   if (playbackState.isPlaying) {
     pausePlayback();
+    startPlayback();
+  }
+}
+
+function setStreamingMode(mode, ws) {
+  const wasPlaying = playbackState.isPlaying;
+  
+  // Pause if playing
+  if (wasPlaying) {
+    pausePlayback();
+  }
+  
+  currentStreamingMode = mode;
+  const modeConfig = STREAMING_MODES[mode];
+  
+  console.log(`Streaming mode changed to: ${modeConfig.name}`);
+  
+  // Notify all clients of mode change
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify({
+        type: 'modeChanged',
+        mode: mode,
+        config: modeConfig
+      }));
+    }
+  });
+  
+  // Resume if was playing
+  if (wasPlaying) {
     startPlayback();
   }
 }
@@ -530,7 +620,7 @@ function setPlaybackSpeed(speed) {
 
 server.listen(PORT, () => {
   console.log('\n' + '='.repeat(60));
-  console.log('🏎️  F1 Unified Server (No Flask required!)');
+  console.log('🏎️  F1 Unified Server');
   console.log('='.repeat(60));
   console.log(`HTTP Server: http://localhost:${PORT}`);
   console.log(`WebSocket: ws://localhost:${PORT}`);
@@ -544,8 +634,12 @@ server.listen(PORT, () => {
   console.log('  POST /api/load (body: {year, round, sessionType})');
   console.log('  GET  /health');
   console.log('\nWebSocket Commands:');
-  console.log('  start, pause, stop, seek, speed');
-  console.log('\n💡 Python is spawned on-demand, no separate server needed!');
+  console.log('  start, pause, stop, seek, speed, mode, getModes');
+  console.log('\nStreaming Modes:');
+  console.log('  replay  - 25 FPS (smooth playback)');
+  console.log('  live    - 3-4 Hz (simulates WebSocket feed)');
+  console.log('  polling - 3s (simulates REST API)');
+  console.log('\n💡 Python is spawned on-demand');
   console.log('='.repeat(60) + '\n');
 });
 
