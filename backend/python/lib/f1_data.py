@@ -16,10 +16,13 @@ FPS = 25
 DT = 1 / FPS
 
 def enable_cache():
-    """Enable FastF1 caching"""
-    cache_dir = '.fastf1-cache'
+    """Enable FastF1 caching (centralized in backend/python/.fastf1-cache)"""
+    lib_dir = os.path.dirname(os.path.abspath(__file__))
+    python_root = os.path.dirname(lib_dir)
+    cache_dir = os.path.join(python_root, '.fastf1-cache')
+    
     if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
     fastf1.Cache.enable_cache(cache_dir)
 
 def _process_single_driver(args):
@@ -177,7 +180,9 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     cache_suffix = 'sprint' if session_type == 'S' else 'race'
     
     # Check cache (JSON instead of pickle)
-    cache_dir = 'computed_data'
+    lib_dir = os.path.dirname(os.path.abspath(__file__))
+    python_root = os.path.dirname(lib_dir)
+    cache_dir = os.path.join(python_root, 'computed_data')
     cache_file = f"{cache_dir}/{event_name}_{cache_suffix}_telemetry.json"
     
     if use_cache and os.path.exists(cache_file):

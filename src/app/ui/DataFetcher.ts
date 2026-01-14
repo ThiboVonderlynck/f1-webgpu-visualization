@@ -17,8 +17,7 @@ interface FetchResponse {
   error?: string;
 }
 
-const PYTHON_API_URL = 'http://localhost:3002/api';
-const NODE_API_URL = 'http://localhost:3001/api';
+const API_URL = 'http://localhost:3001/api';
 
 export class DataFetcher {
   private container: HTMLElement;
@@ -29,6 +28,8 @@ export class DataFetcher {
   private selectedYear: number = 2024;
   private selectedRound: number = 0;
   private selectedSession: string = '';
+  private isLoadingRaces: boolean = false;
+  private isLoadingSessions: boolean = false;
   private onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void;
 
   constructor(container: HTMLElement, onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void) {
@@ -47,7 +48,7 @@ export class DataFetcher {
 
   private async loadYears() {
     try {
-      const response = await fetch(`${PYTHON_API_URL}/years`);
+      const response = await fetch(`${API_URL}/years`);
       const data = await response.json();
       if (data.success) {
         this.years = data.years;
@@ -61,7 +62,7 @@ export class DataFetcher {
 
   private async loadRaces(year: number) {
     try {
-      const response = await fetch(`${PYTHON_API_URL}/races?year=${year}`);
+      const response = await fetch(`${API_URL}/races?year=${year}`);
       const data = await response.json();
       if (data.success) {
         this.races = data.races;
@@ -74,7 +75,7 @@ export class DataFetcher {
 
   private async loadSessions(year: number, round: number) {
     try {
-      const response = await fetch(`${PYTHON_API_URL}/sessions?year=${year}&round=${round}`);
+      const response = await fetch(`${API_URL}/sessions?year=${year}&round=${round}`);
       const data = await response.json();
       if (data.success) {
         this.sessions = data.sessions;
@@ -90,7 +91,7 @@ export class DataFetcher {
 
   private async loadCachedStatus(year: number) {
     try {
-      const response = await fetch(`${NODE_API_URL}/cached/${year}`);
+      const response = await fetch(`${API_URL}/cached/${year}`);
       const data = await response.json();
       if (data.success) {
         this.cachedRaces = data.cached;
@@ -99,6 +100,31 @@ export class DataFetcher {
       console.error('Failed to load cache status:', error);
       this.cachedRaces = {};
     }
+  }
+
+  private renderRaceSkeletons(): string {
+    const skeletons = [];
+    for (let i = 0; i < 24; i++) {
+      skeletons.push(`
+        <div class="option-card skeleton">
+          <div class="skeleton-round"></div>
+          <div class="skeleton-text"></div>
+        </div>
+      `);
+    }
+    return skeletons.join('');
+  }
+
+  private renderSessionSkeletons(): string {
+    const skeletons = [];
+    for (let i = 0; i < 4; i++) {
+      skeletons.push(`
+        <div class="option-card skeleton">
+          <div class="skeleton-text"></div>
+        </div>
+      `);
+    }
+    return skeletons.join('');
   }
 
   private render() {
@@ -134,7 +160,7 @@ export class DataFetcher {
         <div class="section">
           <div class="section-title">Select Grand Prix</div>
           <div class="option-grid races">
-            ${this.races.map(race => {
+            ${this.isLoadingRaces ? this.renderRaceSkeletons() : this.races.map(race => {
               const cached = this.cachedRaces[race.round] || [];
               const hasCached = cached.length > 0;
               return `
@@ -151,7 +177,7 @@ export class DataFetcher {
         <div class="section">
           <div class="section-title">Select Session</div>
           <div class="option-grid sessions">
-            ${this.sessions.map(session => `
+            ${this.isLoadingSessions ? this.renderSessionSkeletons() : this.sessions.map(session => `
               <div class="option-card ${session.code === this.selectedSession ? 'selected' : ''}" data-type="session" data-value="${session.code}">
                 <div class="check-icon">${checkIcon}</div>
                 <div class="option-text">${session.name}</div>
@@ -195,13 +221,22 @@ export class DataFetcher {
           this.selectedYear = parseInt(value!);
           this.selectedRound = 0;
           this.selectedSession = '';
+          this.isLoadingRaces = true;
+          this.races = [];
+          this.sessions = [];
+          this.render();
           await this.loadRaces(this.selectedYear);
           await this.loadCachedStatus(this.selectedYear);
+          this.isLoadingRaces = false;
           this.render();
         } else if (type === 'race') {
           this.selectedRound = parseInt(value!);
           this.selectedSession = '';
+          this.isLoadingSessions = true;
+          this.sessions = [];
+          this.render();
           await this.loadSessions(this.selectedYear, this.selectedRound);
+          this.isLoadingSessions = false;
           this.render();
         } else if (type === 'session') {
           this.selectedSession = value!;
@@ -245,14 +280,14 @@ export class DataFetcher {
 
     try {
       progressStatus.textContent = 'Checking data...';
-      const checkResponse = await fetch(`${NODE_API_URL}/check/${year}/${round}/${sessionType}`);
+      const checkResponse = await fetch(`${API_URL}/check/${year}/${round}/${sessionType}`);
       const checkData = await checkResponse.json();
 
       let needsFetch = !checkData.exists;
 
       if (needsFetch) {
         progressStatus.textContent = 'Fetching from FastF1...';
-        const fetchResponse = await fetch(`${NODE_API_URL}/fetch`, {
+        const fetchResponse = await fetch(`${API_URL}/fetch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ year, round, sessionType }),
@@ -265,7 +300,7 @@ export class DataFetcher {
       }
 
       progressStatus.textContent = 'Loading telemetry...';
-      const loadResponse = await fetch(`${NODE_API_URL}/load`, {
+      const loadResponse = await fetch(`${API_URL}/load`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ year, round, sessionType }),

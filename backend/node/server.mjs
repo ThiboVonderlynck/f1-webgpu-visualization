@@ -28,8 +28,93 @@ app.use(express.json());
 const PORT = 3001;
 
 // ============================================================================
-// REST API Endpoints
+// REST API Endpoints (Unified - No Flask dependency required)
 // ============================================================================
+
+// Static years list - no Python needed
+app.get('/api/years', (req, res) => {
+  const years = [];
+  for (let y = 2025; y >= 2018; y--) {
+    years.push(y);
+  }
+  res.json({ success: true, years });
+});
+
+// Get races for a year - spawns Python on-demand
+app.get('/api/races', async (req, res) => {
+  const year = req.query.year;
+  
+  if (!year) {
+    return res.status(400).json({
+      success: false,
+      error: 'Year parameter is required'
+    });
+  }
+
+  try {
+    console.log(`Fetching races for ${year}...`);
+    
+    const pythonScript = path.join(__dirname, '../python/get_races.py');
+    const command = `python3 "${pythonScript}" ${year}`;
+    
+    const { stdout, stderr } = await execPromise(command, {
+      timeout: 30000, // 30 second timeout
+    });
+    
+    const result = JSON.parse(stdout);
+    
+    if (result.success) {
+      console.log(`✓ Found ${result.races.length} races for ${year}`);
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching races:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get sessions for a race - spawns Python on-demand
+app.get('/api/sessions', async (req, res) => {
+  const { year, round } = req.query;
+  
+  if (!year || !round) {
+    return res.status(400).json({
+      success: false,
+      error: 'Year and round parameters are required'
+    });
+  }
+
+  try {
+    const pythonScript = path.join(__dirname, '../python/get_sessions.py');
+    const command = `python3 "${pythonScript}" ${year} ${round}`;
+    
+    const { stdout } = await execPromise(command, {
+      timeout: 30000,
+    });
+    
+    const result = JSON.parse(stdout);
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'F1 Unified Server',
+    pythonMode: 'on-demand'
+  });
+});
 
 app.get('/api/check/:year/:round/:sessionType', async (req, res) => {
   const { year, round, sessionType } = req.params;
@@ -445,15 +530,22 @@ function setPlaybackSpeed(speed) {
 
 server.listen(PORT, () => {
   console.log('\n' + '='.repeat(60));
-  console.log('🏎️  F1 Telemetry Server');
+  console.log('🏎️  F1 Unified Server (No Flask required!)');
   console.log('='.repeat(60));
   console.log(`HTTP Server: http://localhost:${PORT}`);
   console.log(`WebSocket: ws://localhost:${PORT}`);
   console.log('\nREST Endpoints:');
+  console.log('  GET  /api/years');
+  console.log('  GET  /api/races?year=2024');
+  console.log('  GET  /api/sessions?year=2024&round=1');
+  console.log('  GET  /api/cached/:year');
   console.log('  GET  /api/check/:year/:round/:sessionType');
   console.log('  POST /api/fetch (body: {year, round, sessionType})');
   console.log('  POST /api/load (body: {year, round, sessionType})');
+  console.log('  GET  /health');
   console.log('\nWebSocket Commands:');
   console.log('  start, pause, stop, seek, speed');
+  console.log('\n💡 Python is spawned on-demand, no separate server needed!');
   console.log('='.repeat(60) + '\n');
 });
+
