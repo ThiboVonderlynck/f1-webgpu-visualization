@@ -3,12 +3,14 @@ import { createRenderer, createScene, createCamera, createControls, setupCameraR
 import { CircuitManager } from './app/circuit';
 import { DataFetcher } from './app/ui/DataFetcher.js';
 import { Leaderboard } from './app/ui/Leaderboard.js';
+import { WeatherWidget } from './app/ui/WeatherWidget.js';
 import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './app/playback';
 import { setDriverTeams } from './app/ui/teamMapping.js';
 import type { TrackData } from './app/circuit/trackRenderer.js';
 import './styles/dataFetcher.css';
 import './styles/playbackUI.css';
 import './styles/leaderboard.css';
+import './styles/weather.css';
 
 async function initVisualization(trackData: TrackData) {
   checkWebGPUSupport();
@@ -52,6 +54,11 @@ async function initVisualization(trackData: TrackData) {
     leaderboard.setTrackCenterline(trackData.centerline);
   }
 
+  // Weather widget
+  const weatherContainer = document.createElement('div');
+  document.body.appendChild(weatherContainer);
+  const weatherWidget = new WeatherWidget(weatherContainer);
+
   wsClient.onMetadata((metadata) => {
     console.log('📊 Received metadata:', metadata);
     playbackController.setTotalFrames(metadata.totalFrames);
@@ -69,6 +76,7 @@ async function initVisualization(trackData: TrackData) {
   wsClient.onFrame((frame) => {
     carRenderer.updatePositions(frame);
     leaderboard.updateFromFrame(frame);
+    weatherWidget.updateFromFrame(frame);
     const frameNumber = frame.frameNumber ?? Math.floor(frame.t * 25);
     playbackController.updateFrame(frameNumber);
   });

@@ -2,6 +2,14 @@ export interface TelemetryFrame {
   t: number;
   lap: number;
   frameNumber?: number;
+  weather?: {
+    track_temp: number | null;
+    air_temp: number | null;
+    humidity: number | null;
+    wind_speed: number | null;
+    wind_direction: number | null;
+    rain_state: 'DRY' | 'RAINING';
+  };
   drivers: {
     [code: string]: {
       x: number;

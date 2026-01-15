@@ -139,7 +139,7 @@ def load_session(year, round_number, session_type='R'):
     try:
         print(f"Loading session: {year} Round {round_number} ({session_type})")
         session = fastf1.get_session(year, round_number, session_type)
-        session.load(telemetry=True, weather=False)
+        session.load(telemetry=True, weather=True)
         print(f"✓ Session loaded: {session.event['EventName']}")
         return session
     except Exception as e:
@@ -293,7 +293,45 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     # Create timeline
     timeline = np.arange(global_t_min, global_t_max, DT) - global_t_min
     
-    # Resample data
+    # Resample weather data onto the timeline
+    weather_resampled = None
+    weather_df = getattr(session, "weather_data", None)
+    if weather_df is not None and not weather_df.empty:
+        try:
+            weather_times = weather_df["Time"].dt.total_seconds().to_numpy() - global_t_min
+            if len(weather_times) > 0:
+                order_w = np.argsort(weather_times)
+                weather_times = weather_times[order_w]
+                
+                def _maybe_get(name):
+                    return weather_df[name].to_numpy()[order_w] if name in weather_df else None
+                
+                def _resample_weather(series):
+                    if series is None:
+                        return None
+                    return np.interp(timeline, weather_times, series)
+                
+                track_temp = _resample_weather(_maybe_get("TrackTemp"))
+                air_temp = _resample_weather(_maybe_get("AirTemp"))
+                humidity = _resample_weather(_maybe_get("Humidity"))
+                wind_speed = _resample_weather(_maybe_get("WindSpeed"))
+                wind_direction = _resample_weather(_maybe_get("WindDirection"))
+                rainfall_raw = _maybe_get("Rainfall")
+                rainfall = _resample_weather(rainfall_raw.astype(float)) if rainfall_raw is not None else None
+                
+                weather_resampled = {
+                    "track_temp": track_temp,
+                    "air_temp": air_temp,
+                    "humidity": humidity,
+                    "wind_speed": wind_speed,
+                    "wind_direction": wind_direction,
+                    "rainfall": rainfall,
+                }
+                print("✓ Weather data resampled")
+        except Exception as e:
+            print(f"Weather data could not be processed: {e}")
+    
+    # Resample driver data
     resampled_data = {}
     for code, data in driver_data.items():
         t = data["t"] - global_t_min
@@ -363,11 +401,32 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         # Calculate leader's lap for the frame
         leader_lap = max(int(round(d["lap"][i])) for d in resampled_data.values())
         
-        frames.append({
+        # Build weather snapshot for this frame
+        weather_snapshot = None
+        if weather_resampled:
+            try:
+                wt = weather_resampled
+                rain_val = wt["rainfall"][i] if wt.get("rainfall") is not None else 0.0
+                weather_snapshot = {
+                    "track_temp": round(float(wt["track_temp"][i]), 1) if wt.get("track_temp") is not None else None,
+                    "air_temp": round(float(wt["air_temp"][i]), 1) if wt.get("air_temp") is not None else None,
+                    "humidity": round(float(wt["humidity"][i]), 0) if wt.get("humidity") is not None else None,
+                    "wind_speed": round(float(wt["wind_speed"][i]), 1) if wt.get("wind_speed") is not None else None,
+                    "wind_direction": round(float(wt["wind_direction"][i]), 0) if wt.get("wind_direction") is not None else None,
+                    "rain_state": "RAINING" if rain_val and rain_val >= 0.5 else "DRY",
+                }
+            except Exception as e:
+                pass  # Skip weather for this frame on error
+        
+        frame_payload = {
             "t": round(float(t), 3),
             "lap": leader_lap,
             "drivers": frame_data
-        })
+        }
+        if weather_snapshot:
+            frame_payload["weather"] = weather_snapshot
+        
+        frames.append(frame_payload)
     
     print(f"Completed telemetry extraction: {len(frames)} frames")
     
