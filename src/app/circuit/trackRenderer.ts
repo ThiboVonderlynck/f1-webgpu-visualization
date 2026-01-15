@@ -39,26 +39,48 @@ export class TrackRenderer {
     this.scene.add(this.trackGroup);
   }
 
-  loadTrack(trackData: TrackData): void {
+  async loadTrack(trackData: TrackData): Promise<void> {
     this.clear();
-    this.renderTrackSurface(trackData);
-    this.renderBoundaries(trackData.boundaries);
+    await this.renderTrackSurface(trackData);
+    await this.renderBoundaries(trackData.boundaries);
     this.renderDRSZones(trackData);
     console.log(`✓ Track rendered: ${trackData.centerline.x.length} points, ${trackData.drs_zones?.length || 0} DRS zones`);
   }
 
-  private renderTrackSurface(trackData: TrackData): void {
+  private async renderTrackSurface(trackData: TrackData): Promise<void> {
     const { inner, outer } = trackData.boundaries;
     const vertices: number[] = [];
+    const uvs: number[] = [];
     const indices: number[] = [];
     const trackThickness = 2.0;
 
+    // Calculate cumulative distance for UV mapping
+    const distances: number[] = [0];
+    for (let i = 1; i < inner.x.length; i++) {
+      const dx = inner.x[i] - inner.x[i - 1];
+      const dy = inner.y[i] - inner.y[i - 1];
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      distances.push(distances[i - 1] + dist);
+    }
+
     let vertexIndex = 0;
     for (let i = 0; i < inner.x.length; i++) {
+      // Normalize U coordinate along track (0 to 1, then repeat via texture wrapping)
+      const u = distances[i] * 0.002; // Adjust scale for tiling
+      
+      // Top surface vertices
       vertices.push(inner.x[i], trackThickness, inner.y[i]);
+      uvs.push(u, 0); // Inner edge
+      
       vertices.push(outer.x[i], trackThickness, outer.y[i]);
+      uvs.push(u, 1); // Outer edge
+      
+      // Bottom surface vertices
       vertices.push(inner.x[i], 0, inner.y[i]);
+      uvs.push(u, 0);
+      
       vertices.push(outer.x[i], 0, outer.y[i]);
+      uvs.push(u, 1);
 
       if (i < inner.x.length - 1) {
         const base = vertexIndex * 4;
@@ -76,17 +98,23 @@ export class TrackRenderer {
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x505050,
-      roughness: 0.6,
-      metalness: 0.4,
+    // Load asphalt texture asynchronously
+    const textureLoader = new THREE.TextureLoader();
+    const asphaltTexture = await textureLoader.loadAsync('/images/asphalt.jpg');
+    asphaltTexture.wrapS = THREE.RepeatWrapping;
+    asphaltTexture.wrapT = THREE.RepeatWrapping;
+    asphaltTexture.colorSpace = THREE.SRGBColorSpace;
+    
+    console.log('✓ Asphalt texture loaded');
+
+    // Use MeshBasicMaterial (unlit) since scene may lack sufficient lighting
+    const material = new THREE.MeshBasicMaterial({
+      map: asphaltTexture,
       side: THREE.DoubleSide,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -95,79 +123,162 @@ export class TrackRenderer {
     this.trackGroup.add(mesh);
   }
 
-  private renderBoundaries(boundaries: { inner: { x: number[]; y: number[] }; outer: { x: number[]; y: number[] } }): void {
-    // Reference: track_color = (150, 150, 150) - grey for normal track
-    this.renderBoundaryTube(boundaries.inner, 0x969696, 'inner-boundary', 15);
-    this.renderBoundaryTube(boundaries.outer, 0x969696, 'outer-boundary', 15);
+  private async renderBoundaries(boundaries: { inner: { x: number[]; y: number[] }; outer: { x: number[]; y: number[] } }): Promise<void> {
+    // Load kerb texture once for both boundaries
+    const textureLoader = new THREE.TextureLoader();
+    const kerbTexture = await textureLoader.loadAsync('/images/kerb.png');
+    kerbTexture.wrapS = THREE.RepeatWrapping;
+    kerbTexture.wrapT = THREE.RepeatWrapping;
+    kerbTexture.colorSpace = THREE.SRGBColorSpace;
+    kerbTexture.repeat.set(0.1, 1); // Adjust tiling
+    
+    // Render inner and outer kerbs
+    this.renderBoundaryRibbon(boundaries.inner, kerbTexture, 'inner-boundary', 50, false);
+    this.renderBoundaryRibbon(boundaries.outer, kerbTexture, 'outer-boundary', 50, true);
   }
 
-  private renderBoundaryTube(boundary: { x: number[]; y: number[] }, color: number, name: string, radius: number): void {
-    const points: THREE.Vector3[] = [];
-    // Sample every nth point to reduce geometry complexity
+  private renderBoundaryRibbon(boundary: { x: number[]; y: number[] }, texture: THREE.Texture, name: string, width: number, isOuter: boolean): void {
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    
+    // Sample points for ribbon
     const step = Math.max(1, Math.floor(boundary.x.length / 500));
+    const sampledPoints: { x: number; y: number }[] = [];
+    
     for (let i = 0; i < boundary.x.length; i += step) {
-      points.push(new THREE.Vector3(boundary.x[i], 10.0, boundary.y[i]));
+      sampledPoints.push({ x: boundary.x[i], y: boundary.y[i] });
     }
     // Ensure we include the last point
-    if (points.length > 0) {
-      const lastIdx = boundary.x.length - 1;
-      points.push(new THREE.Vector3(boundary.x[lastIdx], 3.0, boundary.y[lastIdx]));
+    const lastIdx = boundary.x.length - 1;
+    sampledPoints.push({ x: boundary.x[lastIdx], y: boundary.y[lastIdx] });
+
+    if (sampledPoints.length < 2) return;
+
+    let cumulativeDistance = 0;
+    
+    for (let i = 0; i < sampledPoints.length; i++) {
+      const curr = sampledPoints[i];
+      const prev = i > 0 ? sampledPoints[i - 1] : curr;
+      const next = i < sampledPoints.length - 1 ? sampledPoints[i + 1] : curr;
+      
+      // Calculate perpendicular direction for ribbon width
+      const tangentX = next.x - prev.x;
+      const tangentY = next.y - prev.y;
+      const len = Math.sqrt(tangentX * tangentX + tangentY * tangentY) || 1;
+      const perpX = -tangentY / len;
+      const perpY = tangentX / len;
+      
+      // Calculate distance for UV
+      if (i > 0) {
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        cumulativeDistance += Math.sqrt(dx * dx + dy * dy);
+      }
+      const v = cumulativeDistance * 0.02; // UV tiling along track for stripes
+      
+      // Inner edge of ribbon (at boundary)
+      vertices.push(curr.x, 3.0, curr.y);
+      uvs.push(0, v); // U=0 (inner), V=distance (for stripe repetition)
+      
+      // Outer edge of ribbon (offset outward from track)
+      const offsetDir = isOuter ? 1 : -1;
+      vertices.push(curr.x + perpX * width * offsetDir, 3.0, curr.y + perpY * width * offsetDir);
+      uvs.push(1, v); // U=1 (outer), V=distance (for stripe repetition)
+      
+      // Create triangles
+      if (i > 0) {
+        const base = (i - 1) * 2;
+        indices.push(base, base + 2, base + 1);
+        indices.push(base + 1, base + 2, base + 3);
+      }
     }
 
-    if (points.length < 2) return;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
 
-    const curve = new THREE.CatmullRomCurve3(points);
-    const tubeGeometry = new THREE.TubeGeometry(curve, points.length * 2, radius, 8, false);
-    const material = new THREE.MeshBasicMaterial({ 
-      color,
-      depthWrite: true,
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      side: THREE.DoubleSide,
     });
 
-    const mesh = new THREE.Mesh(tubeGeometry, material);
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.name = name;
     this.trackGroup.add(mesh);
   }
 
   private renderDRSZones(trackData: TrackData): void {
-    // Render DRS zones as bright green tubes on OUTER track edge
-    // Reference: drs_color = (0, 255, 0) with line width 6
+    // Render DRS zones as bright green flat ribbons on OUTER track edge
     if (!trackData.drs_zones || trackData.drs_zones.length === 0) {
       return;
     }
 
     const outer = trackData.boundaries.outer;
-    const drsRadius = 25;
+    const drsWidth = 40; // Width of DRS ribbon
     const drsMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x00ff00, // Bright green (0, 255, 0) - exactly like reference
+      color: 0x00ff00, // Bright green
+      side: THREE.DoubleSide,
     });
 
     trackData.drs_zones.forEach((zone, index) => {
       const startIdx = zone.start.index;
       const endIdx = zone.end.index;
 
-      // Create green tube on OUTER boundary (thicker than track lines)
-      const points: THREE.Vector3[] = [];
+      const vertices: number[] = [];
+      const indices: number[] = [];
+      
+      // Sample points along the DRS zone
       const step = Math.max(1, Math.floor((endIdx - startIdx) / 100));
+      const sampledPoints: { x: number; y: number; idx: number }[] = [];
+      
       for (let i = startIdx; i <= Math.min(endIdx, outer.x.length - 1); i += step) {
-        // Slightly higher than boundary to overlay on top
-        points.push(new THREE.Vector3(outer.x[i], 12.0, outer.y[i]));
+        sampledPoints.push({ x: outer.x[i], y: outer.y[i], idx: i });
       }
-      // Ensure we include the end point
       if (endIdx < outer.x.length) {
-        points.push(new THREE.Vector3(outer.x[endIdx], 12.0, outer.y[endIdx]));
+        sampledPoints.push({ x: outer.x[endIdx], y: outer.y[endIdx], idx: endIdx });
       }
 
-      if (points.length > 1) {
-        const curve = new THREE.CatmullRomCurve3(points);
-        const tubeGeometry = new THREE.TubeGeometry(curve, points.length * 2, drsRadius, 8, false);
+      if (sampledPoints.length < 2) return;
+
+      for (let i = 0; i < sampledPoints.length; i++) {
+        const curr = sampledPoints[i];
+        const prev = i > 0 ? sampledPoints[i - 1] : curr;
+        const next = i < sampledPoints.length - 1 ? sampledPoints[i + 1] : curr;
         
-        const mesh = new THREE.Mesh(tubeGeometry, drsMaterial);
-        mesh.name = `drs-zone-${index}`;
-        this.trackGroup.add(mesh);
+        // Calculate perpendicular direction
+        const tangentX = next.x - prev.x;
+        const tangentY = next.y - prev.y;
+        const len = Math.sqrt(tangentX * tangentX + tangentY * tangentY) || 1;
+        const perpX = -tangentY / len;
+        const perpY = tangentX / len;
+        
+        // Inner edge (at boundary)
+        vertices.push(curr.x, 4.0, curr.y);
+        // Outer edge (offset outward)
+        vertices.push(curr.x + perpX * drsWidth, 4.0, curr.y + perpY * drsWidth);
+        
+        // Create triangles
+        if (i > 0) {
+          const base = (i - 1) * 2;
+          indices.push(base, base + 2, base + 1);
+          indices.push(base + 1, base + 2, base + 3);
+        }
       }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+
+      const mesh = new THREE.Mesh(geometry, drsMaterial);
+      mesh.name = `drs-zone-${index}`;
+      this.trackGroup.add(mesh);
     });
 
-    console.log(`✓ Rendered ${trackData.drs_zones.length} DRS zones (green on outer edge)`);
+    console.log(`✓ Rendered ${trackData.drs_zones.length} DRS zones (green flat ribbons)`);
   }
 
   getBounds(): { min: THREE.Vector3; max: THREE.Vector3 } | null {

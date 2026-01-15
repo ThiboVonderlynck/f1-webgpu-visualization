@@ -23,7 +23,7 @@ export class CircuitManager {
         return;
       }
 
-      this.trackRenderer.loadTrack(trackData);
+      await this.trackRenderer.loadTrack(trackData);
       this.adjustCameraToTrack(trackData.bounds);
       this.currentTrack = this.trackRenderer.getBounds() ? new THREE.Group() : null;
     } catch (error) {
