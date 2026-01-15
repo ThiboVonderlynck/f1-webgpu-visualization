@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Fetch F1 race telemetry data and export to JSON
+Fetch F1 race telemetry data and export to MessagePack
 Following reference solution pattern with defensive programming
 """
 import sys
 import json
 import os
+import msgpack
 from lib.f1_data import (
     load_session,
     get_race_telemetry,
@@ -73,13 +74,13 @@ def export_race_data(year, round_number, session_type='R'):
         safe_event_name = event_name.lower().replace(' ', '-').replace("'", "")
         output_file = os.path.join(
             output_dir,
-            f"{round_number:02d}-{safe_event_name}_{session_suffix}.json"
+            f"{round_number:02d}-{safe_event_name}_{session_suffix}.msgpack"
         )
             
-        # Write JSON
+        # Write MessagePack (binary format, much faster than JSON)
         print(f"\nWriting to: {output_file}")
-        with open(output_file, 'w') as f:
-            json.dump(telemetry_data, f, separators=(',', ':'), ensure_ascii=False)
+        with open(output_file, 'wb') as f:
+            msgpack.pack(telemetry_data, f, use_bin_type=True)
         
         file_size_mb = os.path.getsize(output_file) / (1024 * 1024)
         frames_count = len(telemetry_data['telemetry']['frames'])

@@ -45,6 +45,7 @@ backend/python/computed_data/
 
 # Telemetry data (large files)
 public/data/telemetry/**/*.json
+public/data/telemetry/**/*.msgpack
 
 # Environment variables
 .env

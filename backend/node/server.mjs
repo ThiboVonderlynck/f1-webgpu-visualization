@@ -5,18 +5,10 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createReadStream, existsSync, readdirSync } from 'fs';
+import { createReadStream, existsSync, readdirSync, readFileSync } from 'fs';
 import http from 'http';
 import { WebSocketServer } from 'ws';
-import { createRequire } from 'module';
-
-// Import CommonJS modules (stream-json is CommonJS)
-const require = createRequire(import.meta.url);
-const { parser } = require('stream-json');
-const { streamArray } = require('stream-json/streamers/StreamArray');
-const { streamObject } = require('stream-json/streamers/StreamObject');
-const { pick } = require('stream-json/filters/Pick');
-const { chain } = require('stream-chain');
+import { decode } from '@msgpack/msgpack';
 
 const execPromise = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -155,8 +147,11 @@ app.get('/api/check/:year/:round/:sessionType', async (req, res) => {
     const sessionSuffix = sessionType === 'Q' ? 'qualifying' : sessionType === 'S' ? 'sprint' : 'race';
     const roundPrefix = String(round).padStart(2, '0');
 
-    // Find file matching pattern: 01-*_race.json
-    const matchingFile = files.find((f) => f.startsWith(roundPrefix) && f.endsWith(`_${sessionSuffix}.json`));
+    // Find file matching pattern: 01-*_race.msgpack or 01-*_race.json
+    let matchingFile = files.find((f) => f.startsWith(roundPrefix) && f.endsWith(`_${sessionSuffix}.msgpack`));
+    if (!matchingFile) {
+      matchingFile = files.find((f) => f.startsWith(roundPrefix) && f.endsWith(`_${sessionSuffix}.json`));
+    }
 
     if (matchingFile) {
       const fullPath = path.join(telemetryDir, matchingFile);
@@ -191,13 +186,16 @@ app.get('/api/cached/:year', async (req, res) => {
       const files = readdirSync(telemetryDir);
       
       files.forEach(file => {
-        const match = file.match(/^(\d+)-.*_(race|qualifying|sprint)\.json$/);
+        // Match both .msgpack and .json files
+        const match = file.match(/^(\d+)-.*_(race|qualifying|sprint)\.(msgpack|json)$/);
         if (match) {
           const round = parseInt(match[1], 10);
           const session = match[2] === 'race' ? 'R' : match[2] === 'qualifying' ? 'Q' : 'S';
           
           if (!cached[round]) cached[round] = [];
-          cached[round].push(session);
+          if (!cached[round].includes(session)) {
+            cached[round].push(session);
+          }
         }
       });
     }
@@ -287,7 +285,13 @@ app.post('/api/load', async (req, res) => {
     const sessionSuffix = sessionType === 'Q' ? 'qualifying' : sessionType === 'S' ? 'sprint' : 'race';
     const roundPrefix = String(round).padStart(2, '0');
 
-    const matchingFile = files.find((f) => f.startsWith(roundPrefix) && f.endsWith(`_${sessionSuffix}.json`));
+    // Look for MessagePack file first, fallback to JSON for backwards compatibility
+    let matchingFile = files.find((f) => f.startsWith(roundPrefix) && f.endsWith(`_${sessionSuffix}.msgpack`));
+    const isMsgPack = !!matchingFile;
+    
+    if (!matchingFile) {
+      matchingFile = files.find((f) => f.startsWith(roundPrefix) && f.endsWith(`_${sessionSuffix}.json`));
+    }
 
     if (!matchingFile) {
       return res.status(404).json({
@@ -297,41 +301,50 @@ app.post('/api/load', async (req, res) => {
     }
 
     const filePath = path.join(telemetryDir, matchingFile);
-    console.log(`Loading telemetry (streaming): ${filePath}`);
+    console.log(`Loading telemetry: ${filePath}`);
 
-    // Use streaming JSON parser for large files (>536MB string limit workaround)
-    const data = await new Promise((resolve, reject) => {
-      const result = {
-        telemetry: { frames: [] },
-        driver_colors: {},
-        driver_teams: {},
-        total_laps: 0,
-        track: null,
-      };
+    let data;
+    if (isMsgPack) {
+      // MessagePack: Read binary file and decode (10-100x faster than JSON)
+      console.log('Using MessagePack decoder (fast path)');
+      const buffer = readFileSync(filePath);
+      data = decode(buffer);
+    } else {
+      // Fallback: JSON streaming for legacy files
+      console.log('Using JSON streaming parser (legacy)');
+      const { createRequire } = await import('module');
+      const require = createRequire(import.meta.url);
+      const { parser } = require('stream-json');
+      const { streamObject } = require('stream-json/streamers/StreamObject');
+      const { chain } = require('stream-chain');
+      
+      data = await new Promise((resolve, reject) => {
+        const result = {
+          telemetry: { frames: [] },
+          driver_colors: {},
+          driver_teams: {},
+          total_laps: 0,
+          track: null,
+        };
 
-      const pipeline = chain([
-        createReadStream(filePath),
-        parser(),
-        streamObject(),
-      ]);
+        const pipeline = chain([
+          createReadStream(filePath),
+          parser(),
+          streamObject(),
+        ]);
 
-      pipeline.on('data', ({ key, value }) => {
-        if (key === 'telemetry') {
-          result.telemetry = value;
-        } else if (key === 'driver_colors') {
-          result.driver_colors = value;
-        } else if (key === 'driver_teams') {
-          result.driver_teams = value;
-        } else if (key === 'total_laps') {
-          result.total_laps = value;
-        } else if (key === 'track') {
-          result.track = value;
-        }
+        pipeline.on('data', ({ key, value }) => {
+          if (key === 'telemetry') result.telemetry = value;
+          else if (key === 'driver_colors') result.driver_colors = value;
+          else if (key === 'driver_teams') result.driver_teams = value;
+          else if (key === 'total_laps') result.total_laps = value;
+          else if (key === 'track') result.track = value;
+        });
+
+        pipeline.on('end', () => resolve(result));
+        pipeline.on('error', (err) => reject(err));
       });
-
-      pipeline.on('end', () => resolve(result));
-      pipeline.on('error', (err) => reject(err));
-    });
+    }
 
     // Validate structure
     if (!data.telemetry || !data.telemetry.frames) {
@@ -344,7 +357,7 @@ app.post('/api/load', async (req, res) => {
     const totalLaps = data.total_laps || 0;
     const track = data.track || null;
 
-    console.log(`✓ Loaded ${frames.length} frames into memory (via streaming)`);
+    console.log(`✓ Loaded ${frames.length} frames into memory`);
     if (track) {
       console.log(`✓ Track data loaded: ${track.centerline?.x?.length || 0} points`);
     }
