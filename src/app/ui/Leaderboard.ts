@@ -234,8 +234,53 @@ export class Leaderboard {
   private updateLapCounter(): void {
     const lapCounterEl = this.container.querySelector('.lap-counter');
     if (lapCounterEl) {
-      lapCounterEl.textContent = `LAP ${this.currentLap} / ${this.totalLaps}`;
+      lapCounterEl.innerHTML = `<span class="lap-label">LAP </span><span class="lap-current">${this.currentLap}</span><span class="lap-total">/ ${this.totalLaps}</span>`;
     }
+  }
+
+  private updateFlagBanner(trackStatus: string | undefined): void {
+    const banner = this.container.querySelector('.race-flag-banner') as HTMLElement;
+    if (!banner) return;
+    
+    // Status codes: 1=Clear, 2=Yellow, 4=SC, 5=Red, 6/7=VSC
+    const status = trackStatus || '1';
+    
+    if (status === '1') {
+      // All clear - hide banner
+      banner.classList.remove('visible');
+      return;
+    }
+    
+    // Determine flag type and text
+    let flagHtml = '';
+    let flagClass = '';
+    
+    switch (status) {
+      case '2':
+        flagHtml = 'YELLOW FLAG';
+        flagClass = 'yellow';
+        break;
+      case '4':
+        flagHtml = '<img src="/images/logos/FIA.svg" alt="FIA" class="flag-logo" />SAFETY CAR';
+        flagClass = 'safety-car';
+        break;
+      case '5':
+        flagHtml = 'RED FLAG';
+        flagClass = 'red';
+        break;
+      case '6':
+      case '7':
+        flagHtml = 'VIRTUAL SAFETY CAR';
+        flagClass = 'vsc';
+        break;
+      default:
+        banner.classList.remove('visible');
+        return;
+    }
+    
+    // Update banner
+    banner.innerHTML = flagHtml;
+    banner.className = `race-flag-banner ${flagClass} visible`;
   }
 
   updateFromFrame(frame: TelemetryFrame): void {
@@ -294,6 +339,9 @@ export class Leaderboard {
       this.currentLap = entries[0].lap;
       this.updateLapCounter();
     }
+    
+    // Update flag banner
+    this.updateFlagBanner(frame.track_status);
     
     this.updateDOM();
   }
@@ -358,7 +406,6 @@ export class Leaderboard {
           ${teamLogoPath ? `<img src="${teamLogoPath}" alt="${entry.code} team" class="team-logo" />` : ''}
           <div class="driver-code">
             ${entry.code}
-            ${entry.isOut ? '<span class="out-label">OUT</span>' : ''}
           </div>
         </div>
         <div class="driver-right">
@@ -432,6 +479,19 @@ export class Leaderboard {
         pitLabel.dataset.state = currentState;
       }
       
+      // Handle OUT status - show in pit-label area
+      if (entry.isOut) {
+        if (pitLabel.textContent !== 'OUT') {
+          pitLabel.textContent = 'OUT';
+          pitLabel.style.color = 'rgba(255, 255, 255, 0.7)';  // White 70%
+          pitLabel.classList.add('visible');
+        }
+      } else if (pitLabel.textContent === 'OUT') {
+        // Clear OUT status if driver is back (shouldn't happen often)
+        pitLabel.classList.remove('visible');
+        pitLabel.textContent = '';
+      }
+      
       // Update position number
       const positionEl = entryEl.querySelector('.position');
       if (positionEl) {
@@ -472,7 +532,8 @@ export class Leaderboard {
         <div class="leaderboard-header">
           <img src="/images/logos/F1.svg" alt="F1" class="f1-logo" />
         </div>
-        <div class="lap-counter">LAP 0 / 0</div>
+        <div class="lap-counter"><span class="lap-label">LAP </span><span class="lap-current">0</span><span class="lap-total">/ 0</span></div>
+        <div class="race-flag-banner"></div>
         <div class="leaderboard-entries"></div>
       </div>
     `;

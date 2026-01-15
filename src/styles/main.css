@@ -1,3 +1,28 @@
+/* F1 Official Fonts */
+@font-face {
+  font-family: 'Formula1';
+  src: url('/fonts/headers/Formula1-Regular_web_0.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Formula1';
+  src: url('/fonts/headers/Formula1-Bold_web_0.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Formula1-Wide';
+  src: url('/fonts/headers/Formula1-Wide_web_0.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Titillium Web for body text */
+@import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -5,10 +30,20 @@
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Titillium Web', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   overflow: hidden;
   background: #000;
   color: #fff;
+}
+
+/* Headers use F1 font */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Formula1', 'Arial', sans-serif;
 }
 
 #app {

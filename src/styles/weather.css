@@ -1,5 +1,4 @@
-/* Weather Widget Styles - Matches Leaderboard F1 aesthetic */
-@import url("https://fonts.googleapis.com/css?family=Orbitron:300,400,500,700");
+/* Weather Widget Styles - F1 fonts loaded from main.css */
 
 .weather-widget {
     position: fixed;
@@ -9,7 +8,7 @@
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
     width: 180px;
-    font-family: 'Orbitron', 'Arial', sans-serif;
+    font-family: 'Titillium Web', 'Arial', sans-serif;
     backdrop-filter: blur(10px);
     z-index: 899;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -24,7 +23,8 @@
     align-items: center;
     gap: 8px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
+    font-family: 'Formula1', 'Arial', sans-serif;
     color: #fff;
     letter-spacing: 1px;
 }
@@ -53,7 +53,7 @@
 
 .weather-label {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.7);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }

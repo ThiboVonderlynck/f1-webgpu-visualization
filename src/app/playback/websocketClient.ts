@@ -2,6 +2,7 @@ export interface TelemetryFrame {
   t: number;
   lap: number;
   frameNumber?: number;
+  track_status?: string;  // "1"=Clear, "2"=Yellow, "4"=SC, "5"=Red, "6"/"7"=VSC
   weather?: {
     track_temp: number | null;
     air_temp: number | null;

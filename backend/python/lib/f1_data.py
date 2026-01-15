@@ -331,6 +331,26 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         except Exception as e:
             print(f"Weather data could not be processed: {e}")
     
+    # Extract track status data (for flags: yellow, red, safety car, VSC)
+    track_status_intervals = []
+    track_status_df = getattr(session, "track_status", None)
+    if track_status_df is not None and not track_status_df.empty:
+        try:
+            for status in track_status_df.to_dict('records'):
+                start_time = status['Time'].total_seconds() - global_t_min
+                track_status_intervals.append({
+                    'status': str(status['Status']),
+                    'message': status.get('Message', ''),
+                    'start_time': start_time,
+                    'end_time': None,  # Will be set by next interval
+                })
+                # Set end_time of previous interval
+                if len(track_status_intervals) > 1:
+                    track_status_intervals[-2]['end_time'] = start_time
+            print(f"✓ Track status data extracted: {len(track_status_intervals)} intervals")
+        except Exception as e:
+            print(f"Track status could not be processed: {e}")
+    
     # Resample driver data
     resampled_data = {}
     for code, data in driver_data.items():
@@ -425,6 +445,18 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         }
         if weather_snapshot:
             frame_payload["weather"] = weather_snapshot
+        
+        # Determine current track status for this frame time
+        current_status = "1"  # Default: All Clear
+        for interval in track_status_intervals:
+            if interval['start_time'] <= t:
+                if interval['end_time'] is None or t < interval['end_time']:
+                    current_status = interval['status']
+                    break
+        
+        # Only include track_status if not "1" (All Clear) to reduce payload size
+        if current_status != "1":
+            frame_payload["track_status"] = current_status
         
         frames.append(frame_payload)
     

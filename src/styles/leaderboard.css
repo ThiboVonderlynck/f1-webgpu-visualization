@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css?family=Orbitron:300,400,500,700");
+/* Leaderboard Styles - F1 fonts loaded from main.css */
 
 /* Team Colors - Official F1 2024 */
 .team-color-redbull {
@@ -52,7 +52,7 @@
   padding: 0;
   width: 240px;
   overflow-y: visible;
-  font-family: 'Orbitron', 'Arial', sans-serif;
+  font-family: 'Titillium Web', 'Arial', sans-serif;
   backdrop-filter: blur(10px);
   z-index: 900;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -77,7 +77,31 @@
   text-align: center;
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   font-size: 0.9em;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* LAP label - Titillium Web */
+.lap-counter .lap-label {
+  font-family: 'Titillium Web', 'Arial', sans-serif;
+  font-weight: 400;
   color: #fff;
+}
+
+/* Current lap number - Formula1 Bold */
+.lap-counter .lap-current {
+  font-family: 'Formula1', 'Arial', sans-serif;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Total laps - Formula1 Regular, 70% opacity */
+.lap-counter .lap-total {
+  font-family: 'Formula1', 'Arial', sans-serif;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .lap-separator {
@@ -86,6 +110,74 @@
   height: 2px;
   background: white;
   border-radius: 50%;
+}
+
+/* Race Flag Banner - appears below lap counter with slide animation */
+.race-flag-banner {
+  text-align: center;
+  padding: 8px 15px;
+  font-size: 0.85em;
+  font-weight: 700;
+  font-family: 'Formula1', 'Arial', sans-serif;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  overflow: hidden;
+  /* Slide animation - starts collapsed and slides down */
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: max-height 0.35s ease-out,
+    padding 0.35s ease-out,
+    opacity 0.25s ease-out,
+    transform 0.35s ease-out;
+}
+
+.race-flag-banner.visible {
+  max-height: 40px;
+  padding: 8px 15px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Yellow Flag */
+.race-flag-banner.yellow {
+  background: #FFD700;
+  color: #000;
+  border-bottom: 2px solid #B8A000;
+}
+
+/* Red Flag */
+.race-flag-banner.red {
+  background: #DC143C;
+  color: #fff;
+  border-bottom: 2px solid #8B0000;
+}
+
+/* Safety Car */
+.race-flag-banner.safety-car {
+  background: #FFD700;
+  color: #000;
+  border-bottom: 2px solid #B8A000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* FIA Logo in flag banner */
+.race-flag-banner .flag-logo {
+  height: 18px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Virtual Safety Car */
+.race-flag-banner.vsc {
+  background: #FFD700;
+  color: #000;
+  border-bottom: 2px solid #B8A000;
 }
 
 .leaderboard-entries {
@@ -172,7 +264,8 @@
 }
 
 .leaderboard-entry .driver-code {
-  font-weight: bold;
+  font-weight: 700;
+  font-family: 'Formula1', 'Arial', sans-serif;
   font-size: 13px;
   color: #fff;
   display: flex;

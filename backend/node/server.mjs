@@ -297,13 +297,41 @@ app.post('/api/load', async (req, res) => {
     }
 
     const filePath = path.join(telemetryDir, matchingFile);
-    console.log(`Loading telemetry: ${filePath}`);
+    console.log(`Loading telemetry (streaming): ${filePath}`);
 
-    // Load JSON file - Reference solution uses pickle.load() which loads entire file
-    // We do the same but with JSON (line 168 in reference: pickle.load(f))
-    const { readFileSync } = await import('fs');
-    const fileContent = readFileSync(filePath, 'utf-8');
-    const data = JSON.parse(fileContent);
+    // Use streaming JSON parser for large files (>536MB string limit workaround)
+    const data = await new Promise((resolve, reject) => {
+      const result = {
+        telemetry: { frames: [] },
+        driver_colors: {},
+        driver_teams: {},
+        total_laps: 0,
+        track: null,
+      };
+
+      const pipeline = chain([
+        createReadStream(filePath),
+        parser(),
+        streamObject(),
+      ]);
+
+      pipeline.on('data', ({ key, value }) => {
+        if (key === 'telemetry') {
+          result.telemetry = value;
+        } else if (key === 'driver_colors') {
+          result.driver_colors = value;
+        } else if (key === 'driver_teams') {
+          result.driver_teams = value;
+        } else if (key === 'total_laps') {
+          result.total_laps = value;
+        } else if (key === 'track') {
+          result.track = value;
+        }
+      });
+
+      pipeline.on('end', () => resolve(result));
+      pipeline.on('error', (err) => reject(err));
+    });
 
     // Validate structure
     if (!data.telemetry || !data.telemetry.frames) {
@@ -314,21 +342,20 @@ app.post('/api/load', async (req, res) => {
     const driverColors = data.driver_colors || {};
     const driverTeams = data.driver_teams || {};
     const totalLaps = data.total_laps || 0;
-    const track = data.track || null; // Extract track data from telemetry JSON
+    const track = data.track || null;
 
-    console.log(`✓ Loaded ${frames.length} frames into memory`);
+    console.log(`✓ Loaded ${frames.length} frames into memory (via streaming)`);
     if (track) {
       console.log(`✓ Track data loaded: ${track.centerline?.x?.length || 0} points`);
     }
 
     // Store in global state for WebSocket streaming
-    // Reference: line 432 returns {frames, driver_colors, track_statuses, total_laps}
     global.currentTelemetry = {
       frames,
       driverColors,
       driverTeams,
       totalLaps,
-      track, // Include track data in global state
+      track,
       metadata: { year, round, sessionType },
     };
 
@@ -337,7 +364,7 @@ app.post('/api/load', async (req, res) => {
       totalFrames: frames.length,
       drivers: Object.keys(driverColors),
       totalLaps,
-      track, // Include track data in response
+      track,
     });
   } catch (error) {
     console.error('Load error:', error);
