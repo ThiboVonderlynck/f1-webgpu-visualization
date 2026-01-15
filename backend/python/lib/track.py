@@ -1,9 +1,9 @@
 import numpy as np
 
-def build_track_from_telemetry(telemetry_data, track_width=200):
+def build_track_from_telemetry(telemetry_data, track_width=240):
     """
     Build track geometry from telemetry data.
-    Track width of 200 is used for visual display (not realistic F1 track width).
+    Track width of 240 = 12m real width × 20x scale factor for visualization.
     """
     try:
         plot_x_ref = telemetry_data["X"].to_numpy()
