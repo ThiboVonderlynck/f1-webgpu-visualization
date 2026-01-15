@@ -36,12 +36,12 @@ const STREAMING_MODES = {
     interval: 40,      // 1000/25 = 40ms
   },
   live: {
-    name: 'Live Simulation (3-4 Hz)',
-    interval: 300,     // ~3.3 Hz like FastF1/OpenF1 WebSocket
+    name: 'Live Sim (270ms)',
+    interval: 270,     // OpenF1 WebSocket update rate
   },
   polling: {
-    name: 'REST Polling (3s)',
-    interval: 3000,    // Every 3 seconds
+    name: 'REST Polling (500ms)',
+    interval: 500,     // OpenF1 REST API update rate
   }
 };
 
@@ -667,8 +667,8 @@ server.listen(PORT, () => {
   console.log('  start, pause, stop, seek, speed, mode, getModes');
   console.log('\nStreaming Modes:');
   console.log('  replay  - 25 FPS (smooth playback)');
-  console.log('  live    - 3-4 Hz (simulates WebSocket feed)');
-  console.log('  polling - 3s (simulates REST API)');
+  console.log('  live    - 270ms (simulates OpenF1 WebSocket feed)');
+  console.log('  polling - 500ms (simulates OpenF1 REST API)');
   console.log('\n💡 Python is spawned on-demand');
   console.log('='.repeat(60) + '\n');
 });

@@ -89,8 +89,8 @@ export class PlaybackUI {
             <label for="streaming-mode" class="mode-label">Data Mode:</label>
             <select id="streaming-mode" class="mode-dropdown" title="Streaming Mode (for research)">
               <option value="replay">Replay (25 FPS)</option>
-              <option value="live">Live Sim (3-4 Hz)</option>
-              <option value="polling">REST Polling (3s)</option>
+              <option value="live">Live Sim (270ms)</option>
+              <option value="polling">REST Polling (500ms)</option>
             </select>
           </div>
         </div>
