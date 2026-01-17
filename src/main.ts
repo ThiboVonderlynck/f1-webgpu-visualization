@@ -59,10 +59,65 @@ async function initVisualization(trackData: TrackData) {
   document.body.appendChild(weatherContainer);
   const weatherWidget = new WeatherWidget(weatherContainer);
 
-  wsClient.onMetadata((metadata) => {
+  // Create loading overlay for model loading
+  const loadingOverlay = document.createElement('div');
+  loadingOverlay.id = 'model-loading-overlay';
+  loadingOverlay.innerHTML = `
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading 3D models...</div>
+    </div>
+  `;
+  loadingOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease;
+  `;
+  const loadingContent = `
+    <style>
+      #model-loading-overlay .loading-content {
+        text-align: center;
+        color: white;
+      }
+      #model-loading-overlay .loading-spinner {
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 20px;
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top-color: #e10600;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      #model-loading-overlay .loading-text {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 1px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  `;
+  loadingOverlay.insertAdjacentHTML('beforeend', loadingContent);
+  document.body.appendChild(loadingOverlay);
+
+  // Track if cars are ready - queue frames until then
+  let carsReady = false;
+  let pendingFrame: any = null;
+
+  wsClient.onMetadata(async (metadata) => {
     console.log('📊 Received metadata:', metadata);
     playbackController.setTotalFrames(metadata.totalFrames);
-    carRenderer.initializeCars(metadata);
+    await carRenderer.initializeCars(metadata);
     leaderboard.setDriverColors(metadata.driverColors);
     leaderboard.setTotalLaps(metadata.totalLaps || 0);
     
@@ -71,9 +126,28 @@ async function initVisualization(trackData: TrackData) {
       setDriverTeams(metadata.driverTeams);
       leaderboard.resetEntries(); // Force re-render with team logos
     }
+
+    // Cars are now ready - apply any pending frame
+    carsReady = true;
+    if (pendingFrame) {
+      console.log('📍 Applying pending first frame to position cars');
+      carRenderer.updatePositions(pendingFrame);
+      leaderboard.updateFromFrame(pendingFrame);
+      weatherWidget.updateFromFrame(pendingFrame);
+      pendingFrame = null;
+    }
+
+    // Fade out loading overlay
+    loadingOverlay.style.opacity = '0';
+    setTimeout(() => loadingOverlay.remove(), 500);
   });
 
   wsClient.onFrame((frame) => {
+    if (!carsReady) {
+      // Queue first frame until cars are initialized
+      pendingFrame = frame;
+      return;
+    }
     carRenderer.updatePositions(frame);
     leaderboard.updateFromFrame(frame);
     weatherWidget.updateFromFrame(frame);

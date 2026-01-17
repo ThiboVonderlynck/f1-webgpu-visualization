@@ -164,6 +164,23 @@ export class WebSocketClient {
     this.sendCommand('getModes');
   }
 
+  /**
+   * Reconnect to the WebSocket server - triggers fresh metadata and first frame
+   * Call this after loading a new race to refresh the data
+   */
+  async reconnect(): Promise<void> {
+    // Close existing connection if open
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.close();
+    }
+    
+    // Small delay to ensure clean close
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Reconnect
+    return this.connect();
+  }
+
   onFrame(callback: (frame: TelemetryFrame) => void): void {
     this.onFrameCallback = callback;
   }

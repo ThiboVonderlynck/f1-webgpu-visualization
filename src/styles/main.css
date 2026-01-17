@@ -20,9 +20,6 @@
   font-style: normal;
 }
 
-/* Titillium Web for body text */
-@import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&display=swap');
-
 * {
   margin: 0;
   padding: 0;
