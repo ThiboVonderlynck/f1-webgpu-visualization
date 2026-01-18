@@ -30,10 +30,14 @@ export class Leaderboard {
   private totalLaps: number = 0;
   private currentLap: number = 0;
   private entryElements: Map<string, HTMLElement> = new Map();
+  private selectedCode: string | null = null;
   
   // Pit state tracking per driver
   private driverPitState: Map<string, PitState> = new Map();
   private driverHadPitStop: Map<string, boolean> = new Map(); // Tracks if driver stopped (speed ~0)
+  
+  // POV camera callback
+  private onDriverSelectCallback?: (code: string) => void;
 
   // Reference polyline for position projection
   private _ref_xs: Float32Array = new Float32Array(0);
@@ -386,6 +390,14 @@ export class Leaderboard {
         entryEl.dataset.code = entry.code;
         leaderboardEl.appendChild(entryEl);
         this.entryElements.set(entry.code, entryEl);
+        
+        // Add click handler for POV camera
+        entryEl.addEventListener('click', () => {
+          if (this.onDriverSelectCallback) {
+            this.onDriverSelectCallback(entry.code);
+          }
+        });
+        entryEl.style.cursor = 'pointer';
       }
 
       entryEl.style.transform = `translateY(${index * entryHeight}px)`;
@@ -396,7 +408,15 @@ export class Leaderboard {
       const teamLogoPath = getTeamLogoPath(entry.code);
       const teamColorClass = getTeamColorClass(entry.code);
 
-      entryEl.className = `leaderboard-entry ${entry.isOut ? 'out' : ''}`;
+      const isSelected = entry.code === this.selectedCode;
+      const isLeader = index === 0;
+      entryEl.className = `leaderboard-entry ${entry.isOut ? 'out' : ''} ${isSelected ? 'selected' : ''} ${isLeader ? 'leader' : ''}`;
+      
+      if (isSelected) {
+        entryEl.style.setProperty('--driver-rgb', `${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]}`);
+      } else {
+        entryEl.style.removeProperty('--driver-rgb');
+      }
       
       // Build the expected innerHTML
       const expectedHTML = `
@@ -545,5 +565,38 @@ export class Leaderboard {
 
   hide(): void {
     this.container.style.display = 'none';
+  }
+
+  /**
+   * Set the currently selected driver for POV camera highlighting
+   */
+  setSelectedDriver(code: string | null): void {
+    const previousSelected = this.selectedCode;
+    this.selectedCode = code;
+    
+    // Immediately update classes if entry elements exist to avoid waiting for next frame
+    if (previousSelected) {
+      const prevEl = this.entryElements.get(previousSelected);
+      if (prevEl) prevEl.classList.remove('selected');
+    }
+    
+    if (code) {
+      const currEl = this.entryElements.get(code);
+      if (currEl) {
+        currEl.classList.add('selected');
+        // Find entry data to get color
+        const entry = this.entries.find(e => e.code === code);
+        if (entry) {
+            currEl.style.setProperty('--driver-rgb', `${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Set callback for when a driver is clicked (for POV camera)
+   */
+  onDriverSelect(callback: (code: string) => void): void {
+    this.onDriverSelectCallback = callback;
   }
 }

@@ -210,6 +210,22 @@
   opacity: 0.5;
 }
 
+.leaderboard-entry.selected {
+  background: linear-gradient(to left, rgba(var(--driver-rgb), 0.6), transparent) no-repeat right / 50% 100% !important;
+  box-shadow: none;
+}
+
+/* Remove child backgrounds for selected entry to avoid the "rectangle" overlap */
+.leaderboard-entry.selected .driver-left,
+.leaderboard-entry.selected .driver-right {
+  background: transparent !important;
+}
+
+.leaderboard-entry.selected .position {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+}
+
 .driver-left {
   display: flex;
   align-items: center;
@@ -233,8 +249,8 @@
 }
 
 /* First place */
-\n.leaderboard-entry:first-child .position {
-  background: #D31411;
+.leaderboard-entry.leader .position {
+  background: #D31411 !important;
   color: white;
 }
 

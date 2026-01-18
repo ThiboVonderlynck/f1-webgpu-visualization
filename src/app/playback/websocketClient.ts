@@ -23,6 +23,7 @@ export interface TelemetryFrame {
       drs: number;
       throttle: number;
       brake: number;
+      rpm: number;
       position: number;
       tyre: number;
     };

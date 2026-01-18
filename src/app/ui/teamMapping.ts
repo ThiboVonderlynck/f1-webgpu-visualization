@@ -68,3 +68,34 @@ export function getTeamColorClass(driverCode: string): string {
   const teamName = logo.replace('.svg', '').toLowerCase();
   return `team-color-${teamName}`;
 }
+
+/**
+ * Get the full driver name for a given driver code
+ * @param driverCode - Three-letter driver code (e.g., 'VER', 'HAM')
+ */
+export function getDriverName(driverCode: string): string {
+  const drivers: { [key: string]: string } = {
+    'VER': 'Verstappen',
+    'PER': 'Perez',
+    'HAM': 'Hamilton',
+    'RUS': 'Russell',
+    'LEC': 'Leclerc',
+    'SAI': 'Sainz',
+    'NOR': 'Norris',
+    'PIA': 'Piastri',
+    'ALO': 'Alonso',
+    'STR': 'Stroll',
+    'GAS': 'Gasly',
+    'OCO': 'Ocon',
+    'ALB': 'Albon',
+    'SAR': 'Sargeant',
+    'TSU': 'Tsunoda',
+    'RIC': 'Ricciardo',
+    'BOT': 'Bottas',
+    'ZHO': 'Zhou',
+    'MAG': 'Magnussen',
+    'HUL': 'Hulkenberg'
+  };
+  
+  return drivers[driverCode.toUpperCase()] || driverCode;
+}

@@ -23,6 +23,7 @@ export class CarRenderer {
   private driverColors: Map<string, THREE.Color> = new Map();
   private driverTeams: Map<string, string> = new Map();
   private loadedModels: Map<string, THREE.Object3D> = new Map();
+  private cameraMounts: Map<string, THREE.Object3D> = new Map(); // POV camera mount points per driver
   private gltfLoader: GLTFLoader;
 
   constructor(scene: THREE.Scene) {
@@ -94,6 +95,13 @@ export class CarRenderer {
         
         // Rotate model to face forward
         carObject.rotation.y = Math.PI / 2;
+        
+        // Extract camera_mount for POV camera (if present in model)
+        carObject.traverse((child) => {
+          if (child.name === 'camera_mount') {
+            this.cameraMounts.set(code, child);
+          }
+        });
       } else {
         // Fall back to sphere for teams without models
         const geometry = new THREE.SphereGeometry(50, 32, 32);
@@ -226,6 +234,10 @@ export class CarRenderer {
 
   getCar(code: string): THREE.Object3D | undefined {
     return this.cars.get(code);
+  }
+
+  getCameraMount(code: string): THREE.Object3D | undefined {
+    return this.cameraMounts.get(code);
   }
 
   getAllCars(): Map<string, THREE.Object3D> {

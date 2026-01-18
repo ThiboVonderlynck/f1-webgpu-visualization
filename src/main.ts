@@ -4,7 +4,9 @@ import { CircuitManager } from './app/circuit';
 import { DataFetcher } from './app/ui/DataFetcher.js';
 import { Leaderboard } from './app/ui/Leaderboard.js';
 import { WeatherWidget } from './app/ui/WeatherWidget.js';
+import { POVOverlay } from './app/ui/POVOverlay.js';
 import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './app/playback';
+import { POVCamera } from './app/camera/POVCamera';
 import { setDriverTeams } from './app/ui/teamMapping.js';
 import type { TrackData } from './app/circuit/trackRenderer.js';
 import './styles/dataFetcher.css';
@@ -41,10 +43,15 @@ async function initVisualization(trackData: TrackData) {
   const wsClient = new WebSocketClient('ws://localhost:3001');
   const playbackController = new PlaybackController();
   const carRenderer = new CarRenderer(scene);
+  const povCamera = new POVCamera(camera);
+  
+  const uiOverlayContainer = document.createElement('div');
+  document.body.appendChild(uiOverlayContainer);
+  const povOverlay = new POVOverlay(uiOverlayContainer);
 
   const playbackContainer = document.createElement('div');
   document.body.appendChild(playbackContainer);
-  const playbackUI = new PlaybackUI(playbackContainer, playbackController, wsClient);
+  new PlaybackUI(playbackContainer, playbackController, wsClient);
 
   const leaderboardContainer = document.createElement('div');
   document.body.appendChild(leaderboardContainer);
@@ -151,6 +158,11 @@ async function initVisualization(trackData: TrackData) {
     carRenderer.updatePositions(frame);
     leaderboard.updateFromFrame(frame);
     weatherWidget.updateFromFrame(frame);
+    
+    if (povCamera.getIsActive()) {
+      povOverlay.update(frame);
+    }
+
     const frameNumber = frame.frameNumber ?? Math.floor(frame.t * 25);
     playbackController.updateFrame(frameNumber);
   });
@@ -170,7 +182,36 @@ async function initVisualization(trackData: TrackData) {
     alert('Failed to connect to streaming server. Make sure the Node.js server is running on port 3001.');
   }
 
-  startAnimationLoop(renderer, scene, camera, controls, () => {});
+  // Leaderboard driver selection for POV
+  leaderboard.onDriverSelect((code) => {
+    const car = carRenderer.getCar(code);
+    const mount = carRenderer.getCameraMount(code);
+    if (car) {
+      console.log(`🎥 Switching to POV view for: ${code}`);
+      povCamera.setTarget(car, mount);
+      povCamera.activate();
+      povOverlay.show(code);
+      leaderboard.setSelectedDriver(code);
+      controls.enabled = false; // Disable orbit controls in POV
+    }
+  });
+
+  // ESC to exit POV
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && povCamera.getIsActive()) {
+      console.log('🎥 Exiting POV view');
+      povCamera.deactivate();
+      povOverlay.hide();
+      leaderboard.setSelectedDriver(null);
+      controls.enabled = true; // Re-enable orbit controls
+    }
+  });
+
+  startAnimationLoop(renderer, scene, camera, controls, () => {
+    if (povCamera.getIsActive()) {
+      povCamera.update();
+    }
+  });
 }
 
 function init() {

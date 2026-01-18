@@ -51,6 +51,7 @@ def _process_single_driver(args):
         drs_all = []
         throttle_all = []
         brake_all = []
+        rpm_all = []
 
         # Iterate laps in order
         for _, lap in laps_driver.iterlaps():
@@ -70,6 +71,7 @@ def _process_single_driver(args):
                 drs_lap = lap_tel["DRS"].to_numpy()
                 throttle_lap = lap_tel["Throttle"].to_numpy()
                 brake_lap = lap_tel["Brake"].to_numpy()
+                rpm_lap = lap_tel["RPM"].to_numpy()
                 
                 lap_number = lap['LapNumber']
                 tyre_compound = get_tyre_compound_int(lap['Compound'])
@@ -86,6 +88,7 @@ def _process_single_driver(args):
                 drs_all.append(drs_lap)
                 throttle_all.append(throttle_lap)
                 brake_all.append(brake_lap)
+                rpm_all.append(rpm_lap)
                 
             except Exception as e:
                 print(f"Error processing lap for {driver_code}: {e}")
@@ -97,15 +100,15 @@ def _process_single_driver(args):
 
         # Concatenate and sort
         all_arrays = [t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers, 
-                      tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all]
+                      tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all, rpm_all]
         t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers, \
-        tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all = [np.concatenate(arr) for arr in all_arrays]
+        tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all, rpm_all = [np.concatenate(arr) for arr in all_arrays]
         
         order = np.argsort(t_all)
         all_data = [t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers,
-                    tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all]
+                    tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all, rpm_all]
         t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers, \
-        tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all = [arr[order] for arr in all_data]
+        tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all, rpm_all = [arr[order] for arr in all_data]
 
         print(f"Completed telemetry for driver: {driver_code}")
         
@@ -124,6 +127,7 @@ def _process_single_driver(args):
                 "drs": drs_all,
                 "throttle": throttle_all,
                 "brake": brake_all,
+                "rpm": rpm_all,
             },
             "t_min": float(t_all.min()),
             "t_max": float(t_all.max()),
@@ -361,7 +365,7 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         arrays_to_resample = [
             data["x"], data["y"], data["dist"], data["rel_dist"], data["lap"],
             data["tyre"], data["speed"], data["gear"], data["drs"],
-            data["throttle"], data["brake"]
+            data["throttle"], data["brake"], data["rpm"]
         ]
         sorted_arrays = [arr[order] for arr in arrays_to_resample]
         t_sorted = t[order]
@@ -370,7 +374,7 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         resampled = [np.interp(timeline, t_sorted, arr) for arr in sorted_arrays]
         x_resampled, y_resampled, dist_resampled, rel_dist_resampled, lap_resampled, \
         tyre_resampled, speed_resampled, gear_resampled, drs_resampled, \
-        throttle_resampled, brake_resampled = resampled
+        throttle_resampled, brake_resampled, rpm_resampled = resampled
         
         resampled_data[code] = {
             "t": timeline,
@@ -385,6 +389,7 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
             "drs": drs_resampled,
             "throttle": throttle_resampled,
             "brake": brake_resampled,
+            "rpm": rpm_resampled,
         }
     
     # Build frames with position calculation
@@ -415,6 +420,7 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
                 "drs": int(round(d["drs"][i])),
                 "throttle": round(float(d["throttle"][i]), 1),
                 "brake": round(float(d["brake"][i]), 1),
+                "rpm": int(round(d["rpm"][i])),
                 "position": position_map[code],
             }
         
