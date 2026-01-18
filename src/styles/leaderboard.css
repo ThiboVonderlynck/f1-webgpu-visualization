@@ -210,14 +210,21 @@
   opacity: 0.5;
 }
 
+.leaderboard-entry:hover {
+  background: linear-gradient(to left, rgba(var(--driver-rgb), 0.3), transparent) no-repeat right / 50% 100% !important;
+  box-shadow: none;
+}
+
 .leaderboard-entry.selected {
   background: linear-gradient(to left, rgba(var(--driver-rgb), 0.6), transparent) no-repeat right / 50% 100% !important;
   box-shadow: none;
 }
 
-/* Remove child backgrounds for selected entry to avoid the "rectangle" overlap */
+/* Remove child backgrounds for selected or hovered entry to avoid the "rectangle" overlap */
 .leaderboard-entry.selected .driver-left,
-.leaderboard-entry.selected .driver-right {
+.leaderboard-entry.selected .driver-right,
+.leaderboard-entry:hover .driver-left,
+.leaderboard-entry:hover .driver-right {
   background: transparent !important;
 }
 

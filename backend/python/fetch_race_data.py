@@ -32,6 +32,17 @@ def export_race_data(year, round_number, session_type='R'):
         # Get telemetry (uses multiprocessing + caching)
         telemetry_data = get_race_telemetry(session, session_type=session_type)
         
+        # Get grid telemetry (start of race for orientation and grid line)
+        grid_telemetry = None
+        try:
+            drivers = session.laps['Driver'].unique()
+            if len(drivers) > 0:
+                grid_lap = session.laps.pick_drivers(drivers[0]).pick_laps(1)
+                if not grid_lap.empty:
+                    grid_telemetry = grid_lap.get_telemetry()
+        except:
+            pass
+        
         # Get track data from fastest lap (reference: main.py line 42-67)
         print("Extracting track layout from fastest lap...")
         track_data = None
@@ -43,7 +54,7 @@ def export_race_data(year, round_number, session_type='R'):
                 if fastest_quali is not None:
                     quali_telemetry = fastest_quali.get_telemetry()
                     if 'DRS' in quali_telemetry.columns:
-                        track_data = build_track_from_telemetry(quali_telemetry)
+                        track_data = build_track_from_telemetry(quali_telemetry, grid_telemetry=grid_telemetry)
                         print(f"✓ Track data from qualifying lap (driver {fastest_quali['Driver']})")
             except:
                 pass
@@ -53,7 +64,7 @@ def export_race_data(year, round_number, session_type='R'):
                 fastest_lap = session.laps.pick_fastest()
                 if fastest_lap is not None:
                     race_telemetry = fastest_lap.get_telemetry()
-                    track_data = build_track_from_telemetry(race_telemetry)
+                    track_data = build_track_from_telemetry(race_telemetry, grid_telemetry=grid_telemetry)
                     print("✓ Track data from fastest race lap")
         except Exception as e:
             print(f"Warning: Could not extract track data: {e}")

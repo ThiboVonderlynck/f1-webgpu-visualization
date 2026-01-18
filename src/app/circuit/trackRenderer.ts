@@ -26,6 +26,18 @@ export interface TrackData {
     end: { x: number; y: number; index: number };
   }>;
   track_width: number;
+  finish_line?: {
+    x: number;
+    y: number;
+    tangent: { x: number; y: number };
+    normal: { x: number; y: number };
+  };
+  grid_line?: {
+    x: number;
+    y: number;
+    tangent: { x: number; y: number };
+    normal: { x: number; y: number };
+  };
 }
 
 export class TrackRenderer {
@@ -44,6 +56,11 @@ export class TrackRenderer {
     await this.renderTrackSurface(trackData);
     await this.renderBoundaries(trackData.boundaries);
     this.renderDRSZones(trackData);
+    
+    // Only render one visual line: prioritize grid_line (Starting Grid) over finish_line (Timing Line)
+    const primaryLine = trackData.grid_line || trackData.finish_line;
+    await this.renderLine(primaryLine, trackData.track_width, 'start-finish-line');
+    
     console.log(`✓ Track rendered: ${trackData.centerline.x.length} points, ${trackData.drs_zones?.length || 0} DRS zones`);
   }
 
@@ -279,6 +296,38 @@ export class TrackRenderer {
     });
 
     console.log(`✓ Rendered ${trackData.drs_zones.length} DRS zones (green flat ribbons)`);
+  }
+
+  private async renderLine(lineData: any, width: number, name: string): Promise<void> {
+    if (!lineData) return;
+
+    const { x, y, tangent: t } = lineData;
+    const thickness = 50;
+
+    const geometry = new THREE.PlaneGeometry(width, thickness);
+    geometry.rotateX(-Math.PI / 2);
+
+    const textureLoader = new THREE.TextureLoader();
+    const lineTexture = await textureLoader.loadAsync('/images/finish_line.png');
+    lineTexture.colorSpace = THREE.SRGBColorSpace;
+
+    const material = new THREE.MeshBasicMaterial({ 
+      map: lineTexture,
+      transparent: true,
+      opacity: 1.0,
+      side: THREE.DoubleSide
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, 4.3, y);
+
+    const targetX = x + t.x;
+    const targetZ = y + t.y;
+    mesh.lookAt(targetX, 4.3, targetZ);
+
+    mesh.name = name;
+    this.trackGroup.add(mesh);
+    console.log(`🏁 ${name} rendered with texture at (${x.toFixed(2)}, ${y.toFixed(2)})`);
   }
 
   getBounds(): { min: THREE.Vector3; max: THREE.Vector3 } | null {

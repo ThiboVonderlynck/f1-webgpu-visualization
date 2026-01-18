@@ -412,11 +412,7 @@ export class Leaderboard {
       const isLeader = index === 0;
       entryEl.className = `leaderboard-entry ${entry.isOut ? 'out' : ''} ${isSelected ? 'selected' : ''} ${isLeader ? 'leader' : ''}`;
       
-      if (isSelected) {
-        entryEl.style.setProperty('--driver-rgb', `${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]}`);
-      } else {
-        entryEl.style.removeProperty('--driver-rgb');
-      }
+      entryEl.style.setProperty('--driver-rgb', `${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]}`);
       
       // Build the expected innerHTML
       const expectedHTML = `
@@ -584,11 +580,6 @@ export class Leaderboard {
       const currEl = this.entryElements.get(code);
       if (currEl) {
         currEl.classList.add('selected');
-        // Find entry data to get color
-        const entry = this.entries.find(e => e.code === code);
-        if (entry) {
-            currEl.style.setProperty('--driver-rgb', `${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]}`);
-        }
       }
     }
   }
