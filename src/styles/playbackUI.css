@@ -1,8 +1,9 @@
 /* Playback Controls UI - Following reference solution style */
+@import './playbackProgress.css';
 
 .playback-controls {
   position: fixed;
-  bottom: 20px;
+  bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -33,17 +34,19 @@
 }
 
 .control-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  width: 40px;
-  height: 40px;
+  background: transparent;
+  border: none;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: white;
   transition: all 0.2s ease;
+}
+
+.control-btn img {
+  filter: drop-shadow(0 0 2px black);
 }
 
 .control-btn:hover {
@@ -164,8 +167,45 @@
   font-family: 'Monaco', 'Courier New', monospace;
 }
 
-.keyboard-hints {
-  display: none;
+.keyboard-legend {
+  position: fixed;
+  bottom: 180px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 15px;
+  border-radius: 8px;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.keyboard-legend h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: bold;
+  opacity: 0.9;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+
+.legend-row kbd {
+  background: #333;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  min-width: 20px;
+  text-align: center;
+  box-shadow: 0 2px 0 #111;
+}
+
+.legend-row span {
+  opacity: 0.7;
 }
 
 /* Responsive adjustments */

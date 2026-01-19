@@ -1,17 +1,19 @@
 import { PlaybackController } from './playbackController';
 import type { PlaybackState } from './playbackController';
 import { WebSocketClient } from './websocketClient';
+import type { TelemetryMetadata } from './websocketClient';
+import { PlaybackProgress } from '../ui/PlaybackProgress';
+import type { RaceEvent } from './websocketClient';
 
 export class PlaybackUI {
   private container: HTMLElement;
   private controller: PlaybackController;
   private wsClient: WebSocketClient;
 
-  private playPauseBtn?: HTMLButtonElement;
-  private stopBtn?: HTMLButtonElement;
-  private speedDisplay?: HTMLSpanElement;
-  private progressBar?: HTMLInputElement;
-  private timeDisplay?: HTMLSpanElement;
+  private playbackProgress?: PlaybackProgress;
+
+  private events: RaceEvent[] = [];
+  private prevDrivers: Set<string> = new Set();
 
   constructor(container: HTMLElement, controller: PlaybackController, wsClient: WebSocketClient) {
     this.container = container;
@@ -23,157 +25,62 @@ export class PlaybackUI {
 
     // Listen to controller state changes
     this.controller.onStateChange((state) => this.updateUI(state));
+
+    // Listen to data for event extraction
+    this.wsClient.onFrame((frame) => this.handleFrame(frame));
+    this.wsClient.onMetadata((metadata) => this.handleMetadata(metadata));
   }
 
   private render(): void {
     this.container.innerHTML = `
-      <div class="playback-controls">
-        <div class="controls-left">
-          <button id="play-pause-btn" class="control-btn" title="Play/Pause (Space)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path id="play-icon" d="M8 5v14l11-7z"/>
-              <path id="pause-icon" d="M6 4h4v16H6zM14 4h4v16h-4z" style="display:none"/>
-            </svg>
-          </button>
-          
-          <button id="stop-btn" class="control-btn" title="Stop (R)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12"/>
-            </svg>
-          </button>
+      <div id="playback-dashboard-root"></div>
 
-          <button id="rewind-btn" class="control-btn" title="Rewind (←)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M11.5 12l8.5 6V6zM4 18l8.5-6L4 6z"/>
-            </svg>
-          </button>
-
-          <button id="forward-btn" class="control-btn" title="Forward (→)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4 18l8.5-6L4 6zM12.5 6v12l8.5-6z"/>
-            </svg>
-          </button>
-        </div>
-
-        <div class="controls-center">
-          <input 
-            type="range" 
-            id="progress-bar" 
-            class="progress-slider" 
-            min="0" 
-            max="100" 
-            value="0"
-            title="Seek"
-          />
-          <div class="time-display">
-            <span id="time-display">00:00 / 00:00</span>
-          </div>
-        </div>
-
-        <div class="controls-right">
-          <button id="speed-down-btn" class="control-btn" title="Slower (↓)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <text x="50%" y="70%" text-anchor="middle" font-size="16" font-weight="bold">-</text>
-            </svg>
-          </button>
-          
-          <span id="speed-display" class="speed-display">1.0x</span>
-          
-          <button id="speed-up-btn" class="control-btn" title="Faster (↑)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <text x="50%" y="70%" text-anchor="middle" font-size="16" font-weight="bold">+</text>
-            </svg>
-          </button>
-
-          <div class="mode-selector">
-            <label for="streaming-mode" class="mode-label">Data Mode:</label>
-            <select id="streaming-mode" class="mode-dropdown" title="Streaming Mode (for research)">
-              <option value="replay">Replay (25 FPS)</option>
-              <option value="live">Live Sim (270ms)</option>
-              <option value="polling">REST Polling (500ms)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="keyboard-hints">
-        <span>Space: Play/Pause</span>
-        <span>← →: Seek</span>
-        <span>↑ ↓: Speed</span>
-        <span>R: Restart</span>
-        <span>1-4: Speed presets</span>
-      </div>
     `;
   }
 
   private attachEventListeners(): void {
-    // Get elements
-    this.playPauseBtn = this.container.querySelector('#play-pause-btn') as HTMLButtonElement;
-    this.stopBtn = this.container.querySelector('#stop-btn') as HTMLButtonElement;
-    this.speedDisplay = this.container.querySelector('#speed-display') as HTMLSpanElement;
-    this.progressBar = this.container.querySelector('#progress-bar') as HTMLInputElement;
-    this.timeDisplay = this.container.querySelector('#time-display') as HTMLSpanElement;
+    const dashboardRoot = this.container.querySelector('#playback-dashboard-root') as HTMLElement;
+    
+    // Initialize custom progress bar - append to main container
+    this.playbackProgress = new PlaybackProgress(dashboardRoot || this.container, 
+      (frame) => {
+        this.controller.seekToFrame(frame);
+        this.wsClient.seek(frame);
+      },
+      (action, value) => this.handleAction(action, value)
+    );
 
-    // Play/Pause
-    this.playPauseBtn?.addEventListener('click', () => {
-      const state = this.controller.getState();
-      if (state.isPlaying) {
-        this.controller.pause();
-        this.wsClient.pause();
-      } else {
-        this.controller.play();
-        this.wsClient.play();
-      }
-    });
-
-    // Stop
-    this.stopBtn?.addEventListener('click', () => {
-      this.controller.stop();
-      this.wsClient.stop();
-    });
-
-    // Rewind
-    this.container.querySelector('#rewind-btn')?.addEventListener('click', () => {
-      this.controller.seekRelative(-250); // ~10 seconds at 25 FPS
-      this.wsClient.seek(this.controller.getState().currentFrame);
-    });
-
-    // Forward
-    this.container.querySelector('#forward-btn')?.addEventListener('click', () => {
-      this.controller.seekRelative(250); // ~10 seconds at 25 FPS
-      this.wsClient.seek(this.controller.getState().currentFrame);
-    });
-
-    // Speed controls
-    this.container.querySelector('#speed-down-btn')?.addEventListener('click', () => {
-      this.controller.decreaseSpeed();
-      this.wsClient.setSpeed(this.controller.getState().speed);
-    });
-
-    this.container.querySelector('#speed-up-btn')?.addEventListener('click', () => {
-      this.controller.increaseSpeed();
-      this.wsClient.setSpeed(this.controller.getState().speed);
-    });
-
-    // Progress bar
-    this.progressBar?.addEventListener('input', (e) => {
-      const value = parseFloat((e.target as HTMLInputElement).value);
-      const state = this.controller.getState();
-      const frameNumber = Math.floor((value / 100) * state.totalFrames);
-      this.controller.seekToFrame(frameNumber);
-      this.wsClient.seek(frameNumber);
-    });
-
-    // Streaming mode selector (for research demonstration)
-    const modeDropdown = this.container.querySelector('#streaming-mode') as HTMLSelectElement;
-    modeDropdown?.addEventListener('change', (e) => {
-      const mode = (e.target as HTMLSelectElement).value;
-      console.log(`Switching streaming mode to: ${mode}`);
-      this.wsClient.setMode(mode);
-    });
-
-    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+  }
+
+  private handleAction(action: string, value?: any): void {
+    switch (action) {
+      case 'togglePlay':
+        const state = this.controller.getState();
+        if (state.isPlaying) {
+          this.controller.pause();
+          this.wsClient.pause();
+        } else {
+          this.controller.play();
+          this.wsClient.play();
+        }
+        break;
+      case 'seekRelative':
+        this.controller.seekRelative(value);
+        this.wsClient.seek(this.controller.getState().currentFrame);
+        break;
+      case 'changeSpeed':
+        const currentSpeed = this.controller.getState().speed;
+        const newSpeed = value > 0 ? currentSpeed * 2 : currentSpeed / 2;
+        const boundedSpeed = Math.max(0.1, Math.min(newSpeed, 16.0));
+        this.controller.setSpeed(boundedSpeed);
+        this.wsClient.setSpeed(boundedSpeed);
+        break;
+      case 'changeStreamingMode':
+        console.log(`🔄 Streaming mode changed to: ${value}`);
+        this.wsClient.setStreamingMode(value);
+        break;
+    }
   }
 
   private handleKeyPress(e: KeyboardEvent): void {
@@ -250,37 +157,22 @@ export class PlaybackUI {
   }
 
   private updateUI(state: PlaybackState): void {
-    // Update play/pause icon
-    const playIcon = this.container.querySelector('#play-icon') as SVGPathElement;
-    const pauseIcon = this.container.querySelector('#pause-icon') as SVGPathElement;
-    if (playIcon && pauseIcon) {
-      playIcon.style.display = state.isPlaying ? 'none' : 'block';
-      pauseIcon.style.display = state.isPlaying ? 'block' : 'none';
-    }
-
-    // Update speed display
-    if (this.speedDisplay) {
-      this.speedDisplay.textContent = `${state.speed.toFixed(1)}x`;
-    }
-
-    // Update progress bar
-    if (this.progressBar) {
-      const progress = (state.currentFrame / state.totalFrames) * 100;
-      this.progressBar.value = progress.toString();
-    }
-
-    // Update time display
-    if (this.timeDisplay) {
-      const currentTime = Math.floor(state.currentFrame / 25); // 25 FPS
-      const totalTime = Math.floor(state.totalFrames / 25);
-      this.timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(totalTime)}`;
-    }
+    // Progress bar updates also handle integrated controls UI
+    this.playbackProgress?.update(state);
   }
 
-  private formatTime(seconds: number): string {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  private handleFrame(_frame: any): void {
+    // No-op: relying on pre-extracted events from metadata for stability (Reference project model)
+  }
+
+  private handleMetadata(metadata: TelemetryMetadata): void {
+    this.playbackProgress?.clear();
+    
+    // Single source of truth: initialized with pre-extracted events (Static model)
+    this.events = metadata.events || [];
+    this.playbackProgress?.setRaceData(metadata.totalFrames, metadata.totalLaps, this.events);
+    
+    this.prevDrivers.clear();
   }
 
   destroy(): void {

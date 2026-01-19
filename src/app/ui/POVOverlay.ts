@@ -76,9 +76,6 @@ export class POVOverlay {
         </div>
       </div>
 
-      <div class="driver-tag-pro">
-        <div id="dr-name-pro" class="dr-name-pro">ALONSO</div>
-        <div class="dr-status-pro">LIVE TELEMETRY</div>
       </div>
     `;
     
@@ -114,10 +111,15 @@ export class POVOverlay {
   }
 
   update(frame: TelemetryFrame): void {
-    if (!this.currentDriverCode || !this.overlayEl?.classList.contains('active')) return;
+    if (!this.currentDriverCode || !this.overlayEl?.classList.contains('active')) {
+      // console.log('🖥️ POVOverlay: Update skipped - inactive');
+      return;
+    }
     
     const d = frame.drivers[this.currentDriverCode];
-    if (!d) return;
+    if (!d) {
+      return;
+    }
     
     // 1. Speeds
     if (this.speedKmhEl) this.speedKmhEl.textContent = Math.floor(d.speed).toString();

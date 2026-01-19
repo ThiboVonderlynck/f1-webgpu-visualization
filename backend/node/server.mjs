@@ -363,6 +363,9 @@ app.post('/api/load', async (req, res) => {
     }
 
     // Store in global state for WebSocket streaming
+    const extractedEvents = extractRaceEvents(frames);
+    console.log(`📍 Extracted ${extractedEvents.length} events for WebSocket streaming`);
+    
     global.currentTelemetry = {
       frames,
       driverColors,
@@ -370,6 +373,7 @@ app.post('/api/load', async (req, res) => {
       totalLaps,
       track,
       metadata: { year, round, sessionType },
+      events: extractedEvents
     };
 
     res.json({
@@ -378,6 +382,7 @@ app.post('/api/load', async (req, res) => {
       drivers: Object.keys(driverColors),
       totalLaps,
       track,
+      eventsCount: extractedEvents.length,  // Debug: show event count in response
     });
   } catch (error) {
     console.error('Load error:', error);
@@ -408,6 +413,11 @@ wss.on('connection', (ws) => {
 
   // Send initial state
   if (global.currentTelemetry) {
+    // Ensure events are extracted even if data was loaded by an older server version
+    if (!global.currentTelemetry.events) {
+      global.currentTelemetry.events = extractRaceEvents(global.currentTelemetry.frames);
+    }
+    
     ws.send(
       JSON.stringify({
         type: 'metadata',
@@ -416,7 +426,8 @@ wss.on('connection', (ws) => {
           driverColors: global.currentTelemetry.driverColors,
           driverTeams: global.currentTelemetry.driverTeams,
           totalLaps: global.currentTelemetry.totalLaps,
-        },
+          events: global.currentTelemetry.events
+        }
       })
     );
 
@@ -650,6 +661,73 @@ function setStreamingMode(mode, ws) {
   // Resume if was playing
   if (wasPlaying) {
     startPlayback();
+  }
+}
+function extractRaceEvents(frames) {
+  const events = [];
+  if (!frames || frames.length === 0) return events;
+
+  let prevDrivers = new Set();
+  let currentStatus = null;
+  let activeFlagEvent = null;
+
+  for (let i = 0; i < frames.length; i++) {
+    const frame = frames[i];
+    const drivers = frame.drivers || {};
+    const currentDrivers = new Set(Object.keys(drivers));
+
+    // DNFs
+    if (prevDrivers.size > 0) {
+      for (const code of prevDrivers) {
+        if (!currentDrivers.has(code)) {
+          events.push({
+            type: 'dnf',
+            frame: i,
+            label: code,
+            lap: frames[Math.max(0, i - 1)].drivers?.[code]?.lap || frame.lap
+          });
+        }
+      }
+    }
+    prevDrivers = currentDrivers;
+
+    // Track Status
+    // Treat undefined or null as "1" (Clear) to handle transitions back to normal
+    const status = frame.track_status || "1";
+    
+    if (status !== currentStatus) {
+      if (activeFlagEvent) {
+        activeFlagEvent.endFrame = i;
+      }
+      
+      const eventType = mapStatusToEventType(status);
+      if (eventType) {
+        activeFlagEvent = { type: eventType, frame: i, label: '', lap: frame.lap };
+        events.push(activeFlagEvent);
+      } else {
+        // Transition to clear status (e.g. "1")
+        activeFlagEvent = null;
+      }
+      currentStatus = status;
+    }
+  }
+  
+  // Close last flag if still active
+  if (activeFlagEvent) {
+    activeFlagEvent.endFrame = frames.length - 1;
+  }
+
+  return events;
+}
+
+function mapStatusToEventType(status) {
+  switch (String(status)) {
+    case '2': return 'yellow_flag';
+    case '4': return 'safety_car';
+    case '5': return 'red_flag';
+    case '6':
+    case '7': return 'vsc';
+    default: return null;
   }
 }
 

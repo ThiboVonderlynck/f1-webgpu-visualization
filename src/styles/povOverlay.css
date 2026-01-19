@@ -1,6 +1,6 @@
 .pov-hud {
     position: fixed;
-    bottom: 20px;
+    bottom: 130px;
     left: 50%;
     transform: translateX(-50%) scale(0.9);
     width: 1200px;

@@ -30,11 +30,20 @@ export interface TelemetryFrame {
   };
 }
 
+export interface RaceEvent {
+  type: 'dnf' | 'yellow_flag' | 'safety_car' | 'red_flag' | 'vsc';
+  frame: number;
+  endFrame?: number;
+  label: string;
+  lap: number | string;
+}
+
 export interface TelemetryMetadata {
   totalFrames: number;
   driverColors: { [code: string]: [number, number, number] };
   totalLaps: number;
   driverTeams?: { [code: string]: { name: string; key: string } };
+  events?: RaceEvent[];
 }
 
 export class WebSocketClient {
@@ -44,12 +53,12 @@ export class WebSocketClient {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 2000;
 
-  private onFrameCallback?: (frame: TelemetryFrame) => void;
-  private onMetadataCallback?: (metadata: TelemetryMetadata) => void;
-  private onConnectedCallback?: () => void;
-  private onDisconnectedCallback?: () => void;
-  private onModeChangeCallback?: (mode: string, config: any) => void;
-  private onModesReceivedCallback?: (modes: any, current: string) => void;
+  private onFrameCallbacks: Array<(frame: TelemetryFrame) => void> = [];
+  private onMetadataCallbacks: Array<(metadata: TelemetryMetadata) => void> = [];
+  private onConnectedCallbacks: Array<() => void> = [];
+  private onDisconnectedCallbacks: Array<() => void> = [];
+  private onModeChangeCallbacks: Array<(mode: string, config: any) => void> = [];
+  private onModesReceivedCallbacks: Array<(modes: any, current: string) => void> = [];
 
   constructor(url: string = 'ws://localhost:3001') {
     this.url = url;
@@ -63,7 +72,7 @@ export class WebSocketClient {
         this.ws.onopen = () => {
           console.log('✅ WebSocket connected');
           this.reconnectAttempts = 0;
-          this.onConnectedCallback?.();
+          this.onConnectedCallbacks.forEach(cb => cb());
           resolve();
         };
 
@@ -83,7 +92,7 @@ export class WebSocketClient {
 
         this.ws.onclose = () => {
           console.log('WebSocket disconnected');
-          this.onDisconnectedCallback?.();
+          this.onDisconnectedCallbacks.forEach(cb => cb());
           this.attemptReconnect();
         };
       } catch (error) {
@@ -96,13 +105,13 @@ export class WebSocketClient {
     switch (message.type) {
       case 'metadata':
         console.log('📊 Received metadata:', message.data);
-        this.onMetadataCallback?.(message.data);
+        this.onMetadataCallbacks.forEach(cb => cb(message.data));
         break;
 
       case 'frame':
         // Pass both frame data and frameNumber
         const frameData = { ...message.data, frameNumber: message.frameNumber };
-        this.onFrameCallback?.(frameData);
+        this.onFrameCallbacks.forEach(cb => cb(frameData));
         break;
 
       case 'status':
@@ -111,12 +120,12 @@ export class WebSocketClient {
 
       case 'modeChanged':
         console.log(`🔄 Streaming mode changed to: ${message.config?.name}`);
-        this.onModeChangeCallback?.(message.mode, message.config);
+        this.onModeChangeCallbacks.forEach(cb => cb(message.mode, message.config));
         break;
 
       case 'modes':
         console.log('📋 Available modes:', message.modes);
-        this.onModesReceivedCallback?.(message.modes, message.current);
+        this.onModesReceivedCallbacks.forEach(cb => cb(message.modes, message.current));
         break;
 
       case 'error':
@@ -161,6 +170,11 @@ export class WebSocketClient {
     this.sendCommand('mode', mode);
   }
 
+  setStreamingMode(mode: 'replay' | 'live' | 'polling'): void {
+    console.log(`📡 Setting streaming mode to: ${mode}`);
+    this.sendCommand('mode', mode);
+  }
+
   getModes(): void {
     this.sendCommand('getModes');
   }
@@ -183,27 +197,27 @@ export class WebSocketClient {
   }
 
   onFrame(callback: (frame: TelemetryFrame) => void): void {
-    this.onFrameCallback = callback;
+    this.onFrameCallbacks.push(callback);
   }
 
   onMetadata(callback: (metadata: TelemetryMetadata) => void): void {
-    this.onMetadataCallback = callback;
+    this.onMetadataCallbacks.push(callback);
   }
 
   onConnected(callback: () => void): void {
-    this.onConnectedCallback = callback;
+    this.onConnectedCallbacks.push(callback);
   }
 
   onDisconnected(callback: () => void): void {
-    this.onDisconnectedCallback = callback;
+    this.onDisconnectedCallbacks.push(callback);
   }
 
   onModeChange(callback: (mode: string, config: any) => void): void {
-    this.onModeChangeCallback = callback;
+    this.onModeChangeCallbacks.push(callback);
   }
 
   onModesReceived(callback: (modes: any, current: string) => void): void {
-    this.onModesReceivedCallback = callback;
+    this.onModesReceivedCallbacks.push(callback);
   }
 
   private attemptReconnect(): void {
