@@ -18,9 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
-
-// Use virtualenv Python in production, fallback to python3 locally
-const PYTHON_CMD = existsSync('/opt/venv/bin/python3') ? '/opt/venv/bin/python3' : 'python3';
+const PYTHON_CMD = 'python3';
 
 // ============================================================================
 // Streaming Modes (for research: simulating different data sources)
