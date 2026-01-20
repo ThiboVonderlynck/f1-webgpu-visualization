@@ -177,12 +177,16 @@ export class DataFetcher {
         <div class="section">
           <div class="section-title">Select Session</div>
           <div class="option-grid sessions">
-            ${this.isLoadingSessions ? this.renderSessionSkeletons() : this.sessions.map(session => `
-              <div class="option-card ${session.code === this.selectedSession ? 'selected' : ''}" data-type="session" data-value="${session.code}">
+            ${this.isLoadingSessions ? this.renderSessionSkeletons() : this.sessions.map(session => {
+              const cachedSessions = this.cachedRaces[this.selectedRound] || [];
+              const isSessionCached = cachedSessions.includes(session.code);
+              return `
+              <div class="option-card ${session.code === this.selectedSession ? 'selected' : ''} ${isSessionCached ? 'cached' : ''}" data-type="session" data-value="${session.code}">
                 <div class="check-icon">${checkIcon}</div>
+                ${isSessionCached ? '<div class="cached-badge">CACHED</div>' : ''}
                 <div class="option-text">${session.name}</div>
               </div>
-            `).join('')}
+            `}).join('')}
           </div>
         </div>
 
@@ -320,12 +324,16 @@ export class DataFetcher {
           </div>
         `;
 
-        setTimeout(() => {
+        // Wait a moment for the success message, then initialize visualization
+        // Use await with a promise-based delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        if (this.onDataFetched) {
+          progressStatus.textContent = 'Starting visualization...';
+          await this.onDataFetched(year, round, sessionType, loadData.track);
+          // Only hide after visualization is fully initialized
           this.container.style.display = 'none';
-          if (this.onDataFetched) {
-            this.onDataFetched(year, round, sessionType, loadData.track);
-          }
-        }, 1500);
+        }
       } else {
         throw new Error(loadData.error || 'Failed to load data');
       }
@@ -334,15 +342,14 @@ export class DataFetcher {
       progressStatus.textContent = 'Error';
       progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #ff4d4d 100%)';
       messageContainer.innerHTML = `<div class="message error">✗ ${error instanceof Error ? error.message : 'Unknown error'}</div>`;
-    } finally {
+      
+      // Only re-enable button on error
       button.disabled = false;
       button.textContent = 'LOAD DATA & START';
-
-      if (!messageContainer.querySelector('.success')) {
-        setTimeout(() => {
-          progressContainer.classList.remove('active');
-        }, 3000);
-      }
+      
+      setTimeout(() => {
+        progressContainer.classList.remove('active');
+      }, 3000);
     }
   }
 }

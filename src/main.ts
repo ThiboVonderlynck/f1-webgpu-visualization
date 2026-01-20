@@ -13,66 +13,18 @@ import './styles/dataFetcher.css';
 import './styles/playbackUI.css';
 import './styles/leaderboard.css';
 import './styles/weather.css';
+import './styles/qualifying.css';
 
 async function initVisualization(trackData: TrackData) {
   checkWebGPUSupport();
 
-  const renderer = createRenderer();
-  await renderer.init();
-
-  const scene = createScene();
-
-  const camera = createCamera();
-  const controls = createControls(camera, renderer.domElement);
-  setupCameraResize(camera);
-
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  addLights(scene);
-
-  const circuitManager = new CircuitManager(scene, camera, controls);
-  if (trackData) {
-    await circuitManager.loadTrackFromTelemetry(trackData);
-    console.log('✅ Track loaded from telemetry');
-  } else {
-    console.warn('⚠️ No track data provided');
-  }
-
-  const wsClient = new WebSocketClient('ws://localhost:3001');
-  const playbackController = new PlaybackController();
-  const carRenderer = new CarRenderer(scene);
-  const povCamera = new POVCamera(camera);
-  
-  const uiOverlayContainer = document.createElement('div');
-  document.body.appendChild(uiOverlayContainer);
-  const povOverlay = new POVOverlay(uiOverlayContainer);
-
-  const playbackContainer = document.createElement('div');
-  document.body.appendChild(playbackContainer);
-  new PlaybackUI(playbackContainer, playbackController, wsClient);
-
-  const leaderboardContainer = document.createElement('div');
-  document.body.appendChild(leaderboardContainer);
-  const leaderboard = new Leaderboard(leaderboardContainer);
-
-  if (trackData && trackData.centerline) {
-    leaderboard.setTrackCenterline(trackData.centerline);
-  }
-
-  // Weather widget
-  const weatherContainer = document.createElement('div');
-  document.body.appendChild(weatherContainer);
-  const weatherWidget = new WeatherWidget(weatherContainer);
-
-  // Create loading overlay for model loading
+  // Create loading overlay FIRST (before renderer) so it's visible during initialization
   const loadingOverlay = document.createElement('div');
   loadingOverlay.id = 'model-loading-overlay';
   loadingOverlay.innerHTML = `
     <div class="loading-content">
       <div class="loading-spinner"></div>
-      <div class="loading-text">Loading 3D models...</div>
+      <div class="loading-text">Initializing 3D engine...</div>
     </div>
   `;
   loadingOverlay.style.cssText = `
@@ -81,7 +33,7 @@ async function initVisualization(trackData: TrackData) {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.9);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
@@ -117,12 +69,67 @@ async function initVisualization(trackData: TrackData) {
   loadingOverlay.insertAdjacentHTML('beforeend', loadingContent);
   document.body.appendChild(loadingOverlay);
 
+  // Helper to update loading text
+  const updateLoadingText = (text: string) => {
+    const textEl = loadingOverlay.querySelector('.loading-text');
+    if (textEl) textEl.textContent = text;
+  };
+
+  updateLoadingText('Initializing 3D engine...');
+  const renderer = createRenderer();
+  await renderer.init();
+
+  const scene = createScene();
+
+  const camera = createCamera();
+  const controls = createControls(camera, renderer.domElement);
+  setupCameraResize(camera);
+
+  window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  addLights(scene);
+
+  updateLoadingText('Loading track...');
+  const circuitManager = new CircuitManager(scene, camera, controls);
+  if (trackData) {
+    await circuitManager.loadTrackFromTelemetry(trackData);
+  }
+
+  updateLoadingText('Connecting to server...');
+  const wsClient = new WebSocketClient('ws://localhost:3001');
+  const playbackController = new PlaybackController();
+  const carRenderer = new CarRenderer(scene);
+  const povCamera = new POVCamera(camera);
+  
+  const uiOverlayContainer = document.createElement('div');
+  document.body.appendChild(uiOverlayContainer);
+  const povOverlay = new POVOverlay(uiOverlayContainer);
+
+  const playbackContainer = document.createElement('div');
+  document.body.appendChild(playbackContainer);
+  new PlaybackUI(playbackContainer, playbackController, wsClient);
+
+  const leaderboardContainer = document.createElement('div');
+  document.body.appendChild(leaderboardContainer);
+  const leaderboard = new Leaderboard(leaderboardContainer);
+
+  if (trackData && trackData.centerline) {
+    leaderboard.setTrackCenterline(trackData.centerline);
+  }
+
+  // Weather widget
+  const weatherContainer = document.createElement('div');
+  document.body.appendChild(weatherContainer);
+  const weatherWidget = new WeatherWidget(weatherContainer);
   // Track if cars are ready - queue frames until then
   let carsReady = false;
   let pendingFrame: any = null;
 
   wsClient.onMetadata(async (metadata) => {
     console.log('📊 Received metadata:', metadata);
+    updateLoadingText('Loading 3D car models...');
     playbackController.setTotalFrames(metadata.totalFrames);
     await carRenderer.initializeCars(metadata);
     leaderboard.setDriverColors(metadata.driverColors);
@@ -132,6 +139,15 @@ async function initVisualization(trackData: TrackData) {
     if (metadata.driverTeams) {
       setDriverTeams(metadata.driverTeams);
       leaderboard.resetEntries(); // Force re-render with team logos
+    }
+
+    // Handle qualifying mode
+    if (metadata.sessionType === 'Q' && metadata.qualifying) {
+      console.log('🏁 Qualifying session detected - enabling qualifying mode');
+      leaderboard.setQualifyingData(metadata.qualifying);
+    } else {
+      // Ensure race mode for non-qualifying sessions
+      leaderboard.setSessionMode('race');
     }
 
     // Cars are now ready - apply any pending frame
@@ -228,7 +244,6 @@ function init() {
 
     try {
       await initVisualization(trackData);
-      console.log('🏁 Visualization initialized - ready for playback!');
     } catch (error) {
       console.error('Failed to initialize visualization:', error);
       document.body.innerHTML = `

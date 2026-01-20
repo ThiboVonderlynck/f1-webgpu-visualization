@@ -38,12 +38,69 @@ export interface RaceEvent {
   lap: number | string;
 }
 
+// Qualifying-specific types
+export interface SectorBest {
+  time: string;
+  driver: string;
+}
+
+export interface QualifyingLapEvent {
+  driver: string;
+  lap_number: number;
+  time_ms: number;  // When this lap was completed (session time in ms)
+  lap_time: string;
+  lap_time_ms: number;
+  sector1: string | null;
+  sector2: string | null;
+  sector3: string | null;
+  is_personal_best: boolean;
+  deleted: boolean;
+  compound: string;
+}
+
+export interface QualifyingSessionPhase {
+  name: 'Q1' | 'Q2' | 'Q3';
+  start_ms: number;  // Session time when phase started
+  end_ms: number;    // Session time when phase ended
+  elimination_positions: number[];
+}
+
+export interface QualifyingResult {
+  position: number;
+  driver_number: number;
+  abbreviation: string;
+  full_name: string;
+  team_name: string;
+  team_color: string;
+  q1_time: string | null;
+  q1_time_ms: number | null;
+  q2_time: string | null;
+  q2_time_ms: number | null;
+  q3_time: string | null;
+  q3_time_ms: number | null;
+  eliminated_in: 'Q1' | 'Q2' | null;
+}
+
+export interface QualifyingMetadata {
+  session_type: 'qualifying';
+  session_phases: QualifyingSessionPhase[];
+  results: QualifyingResult[];
+  sector_bests: {
+    sector1?: SectorBest;
+    sector2?: SectorBest;
+    sector3?: SectorBest;
+  };
+  lap_events: QualifyingLapEvent[];
+}
+
 export interface TelemetryMetadata {
   totalFrames: number;
   driverColors: { [code: string]: [number, number, number] };
   totalLaps: number;
   driverTeams?: { [code: string]: { name: string; key: string } };
   events?: RaceEvent[];
+  sessionType?: 'R' | 'Q' | 'S' | 'SQ';
+  qualifying?: QualifyingMetadata;
 }
 
 export class WebSocketClient {

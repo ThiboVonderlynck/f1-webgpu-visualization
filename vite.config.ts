@@ -9,6 +9,14 @@ export default defineConfig({
     fs: {
       allow: ['..'],
     },
+    // Ignore backend directories to prevent crashes during data fetching
+    watch: {
+      ignored: [
+        '**/backend/**',
+        '**/node_modules/**',
+        '**/.git/**',
+      ],
+    },
   },
 
   // Copy data directory to dist on build

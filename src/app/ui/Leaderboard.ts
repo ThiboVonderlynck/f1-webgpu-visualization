@@ -1,5 +1,7 @@
-import type { TelemetryFrame } from '../playback/websocketClient';
+import type { TelemetryFrame, QualifyingMetadata, QualifyingResult } from '../playback/websocketClient';
 import { getTeamLogoPath, getTeamColorClass } from './teamMapping.js';
+
+type SessionMode = 'race' | 'qualifying';
 
 interface LeaderboardEntry {
   code: string;
@@ -13,6 +15,12 @@ interface LeaderboardEntry {
   isOut: boolean;
   pitState: PitState;
   gap?: string;
+  // Qualifying-specific fields
+  q1Time?: string | null;
+  q2Time?: string | null;
+  q3Time?: string | null;
+  eliminatedIn?: 'Q1' | 'Q2' | null;
+  isInDangerZone?: boolean;
 }
 
 interface ProjectionResult {
@@ -45,9 +53,367 @@ export class Leaderboard {
   private _ref_cumdist: Float32Array = new Float32Array(0);
   private _ref_total_length: number = 0.0;
 
+  // Qualifying mode support
+  private sessionMode: SessionMode = 'race';
+  private qualifyingData: QualifyingMetadata | null = null;
+  private currentPhase: 'Q1' | 'Q2' | 'Q3' = 'Q1';
+  private qualifyingResultsMap: Map<string, QualifyingResult> = new Map();
+  
+  // Live qualifying state (calculated from lap events up to current time)
+  private liveQualifyingState: Map<string, {
+    bestTime: number | null;  // Best lap time in ms
+    bestTimeStr: string | null;
+    eliminated: boolean;
+    eliminatedIn: 'Q1' | 'Q2' | null;
+  }> = new Map();
+  private q1EliminatedDrivers: Set<string> = new Set();
+  private q2EliminatedDrivers: Set<string> = new Set();
+
   constructor(container: HTMLElement) {
     this.container = container;
     this.render();
+  }
+
+  /**
+   * Set the session mode (race or qualifying)
+   */
+  setSessionMode(mode: SessionMode): void {
+    this.sessionMode = mode;
+    this.render(); // Re-render with appropriate layout
+    this.resetEntries();
+  }
+
+  /**
+   * Set qualifying metadata for TV-like display
+   */
+  setQualifyingData(data: QualifyingMetadata): void {
+    this.qualifyingData = data;
+    this.sessionMode = 'qualifying';
+    
+    // Reset all live qualifying state - IMPORTANT: start fresh!
+    this.q1EliminatedDrivers.clear();
+    this.q2EliminatedDrivers.clear();
+    this.liveQualifyingState.clear();
+    this.currentPhase = 'Q1';
+    
+    // Build lookup map for quick access (static final results, for reference only)
+    this.qualifyingResultsMap.clear();
+    for (const result of data.results) {
+      this.qualifyingResultsMap.set(result.abbreviation, result);
+    }
+    
+    this.render();
+    this.resetEntries();
+  }
+
+  /**
+   * Set current qualifying phase (Q1, Q2, Q3)
+   */
+  setQualifyingPhase(phase: 'Q1' | 'Q2' | 'Q3'): void {
+    this.currentPhase = phase;
+    this.updatePhaseIndicator();
+  }
+
+  /**
+   * Get elimination zone positions for current phase
+   */
+  private getEliminationZone(): number[] {
+    if (this.currentPhase === 'Q1') return [16, 17, 18, 19, 20];
+    if (this.currentPhase === 'Q2') return [11, 12, 13, 14, 15];
+    return []; // Q3 has no elimination
+  }
+
+  private updatePhaseIndicator(): void {
+    const phaseEl = this.container.querySelector('.quali-phase');
+    if (phaseEl) {
+      phaseEl.textContent = this.currentPhase;
+      phaseEl.className = `quali-phase ${this.currentPhase.toLowerCase()}`;
+    }
+  }
+
+  /**
+   * Update the qualifying countdown timer
+   */
+  private updateQualiTimer(sessionTimeMs: number): void {
+    const timerEl = this.container.querySelector('.quali-timer');
+    if (!timerEl || !this.qualifyingData) return;
+
+    // Find current phase timing
+    const currentPhaseData = this.qualifyingData.session_phases.find(p => p.name === this.currentPhase);
+    if (!currentPhaseData) {
+      timerEl.textContent = '--:--';
+      return;
+    }
+
+    // Calculate remaining time in the current phase
+    let remainingMs: number;
+    
+    if (sessionTimeMs < currentPhaseData.start_ms) {
+      // Before phase starts - show full duration
+      remainingMs = currentPhaseData.end_ms - currentPhaseData.start_ms;
+    } else if (sessionTimeMs >= currentPhaseData.end_ms) {
+      // Phase ended
+      remainingMs = 0;
+    } else {
+      // During phase - calculate remaining
+      remainingMs = currentPhaseData.end_ms - sessionTimeMs;
+    }
+
+    // Format as MM:SS
+    const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Add styling classes based on time remaining
+    timerEl.classList.remove('warning', 'ended');
+    if (totalSeconds === 0) {
+      timerEl.classList.add('ended');
+    } else if (totalSeconds <= 60) {
+      timerEl.classList.add('warning');
+    }
+  }
+
+  /**
+   * Update live qualifying state based on current session time
+   * This calculates standings from lap events that have occurred up to this point
+   */
+  updateQualifyingTime(sessionTimeMs: number): void {
+    if (!this.qualifyingData || this.sessionMode !== 'qualifying') return;
+    
+    // Determine current phase based on session time
+    let newPhase: 'Q1' | 'Q2' | 'Q3' = 'Q1';
+    
+    const q1Phase = this.qualifyingData.session_phases.find(p => p.name === 'Q1');
+    if (q1Phase && sessionTimeMs < q1Phase.start_ms) {
+      // We're before Q1 has started
+      newPhase = 'Q1';
+    } else {
+      for (const phase of this.qualifyingData.session_phases) {
+        if (sessionTimeMs >= phase.start_ms && sessionTimeMs <= phase.end_ms) {
+          newPhase = phase.name;
+          break;
+        } else if (sessionTimeMs > phase.end_ms) {
+          newPhase = phase.name; // We're past this phase
+        }
+      }
+    }
+    
+    // Update phase indicator if changed
+    if (newPhase !== this.currentPhase) {
+      this.currentPhase = newPhase;
+      this.updatePhaseIndicator();
+    }
+    
+    // Update the countdown timer
+    this.updateQualiTimer(sessionTimeMs);
+    
+    // Check for eliminations - use phase START times as the trigger
+    // Q1 eliminations happen when Q2 starts (all Q1 laps are done by then)
+    // Q2 eliminations happen when Q3 starts
+    const q2Start = this.qualifyingData.session_phases.find(p => p.name === 'Q2')?.start_ms || Infinity;
+    const q3Start = this.qualifyingData.session_phases.find(p => p.name === 'Q3')?.start_ms || Infinity;
+    
+    // Q1 eliminations: calculate when Q2 starts (all Q1 laps complete by then)
+    if (sessionTimeMs >= q2Start && this.q1EliminatedDrivers.size === 0) {
+      this.calculateQ1Eliminations();
+    }
+    
+    // Q2 eliminations: calculate when Q3 starts
+    if (sessionTimeMs >= q3Start && this.q2EliminatedDrivers.size === 0) {
+      this.calculateQ2Eliminations();
+    }
+    
+    // If user seeks backward before Q2 start, clear Q1 eliminations
+    if (sessionTimeMs < q2Start && this.q1EliminatedDrivers.size > 0) {
+      this.q1EliminatedDrivers.clear();
+    }
+    
+    // If user seeks backward before Q3 start, clear Q2 eliminations
+    if (sessionTimeMs < q3Start && this.q2EliminatedDrivers.size > 0) {
+      this.q2EliminatedDrivers.clear();
+    }
+    
+    // Calculate live standings from lap events up to current time
+    this.calculateLiveStandings(sessionTimeMs);
+  }
+
+  /**
+   * Calculate live standings based on lap events up to the current time
+   * Each phase (Q1/Q2/Q3) tracks its own best time - this matches how F1 officially works
+   */
+  private calculateLiveStandings(sessionTimeMs: number): void {
+    if (!this.qualifyingData) return;
+    
+    // Determine phase boundaries
+    const q2Start = this.qualifyingData.session_phases.find(p => p.name === 'Q2')?.start_ms || Infinity;
+    const q3Start = this.qualifyingData.session_phases.find(p => p.name === 'Q3')?.start_ms || Infinity;
+    
+    // Determine current phase
+    let currentPhaseName: 'Q1' | 'Q2' | 'Q3' = 'Q1';
+    if (sessionTimeMs >= q3Start) {
+      currentPhaseName = 'Q3';
+    } else if (sessionTimeMs >= q2Start) {
+      currentPhaseName = 'Q2';
+    }
+    
+    // Reset live state
+    this.liveQualifyingState.clear();
+    
+    // For each driver, calculate their best time FOR THE CURRENT PHASE
+    for (const result of this.qualifyingData.results) {
+      let bestTime: number | null = null;
+      let bestTimeStr: string | null = null;
+      
+      const isQ1Eliminated = this.q1EliminatedDrivers.has(result.abbreviation);
+      const isQ2Eliminated = this.q2EliminatedDrivers.has(result.abbreviation);
+      const isEliminated = isQ1Eliminated || isQ2Eliminated;
+      
+      // Process lap events for this driver
+      for (const lap of this.qualifyingData.lap_events) {
+        if (lap.driver !== result.abbreviation || lap.deleted) continue;
+        if (lap.time_ms > sessionTimeMs) continue; // Lap not completed yet
+        
+        // Determine which phase this lap belongs to
+        const isQ1Lap = lap.time_ms < q2Start;
+        const isQ2Lap = lap.time_ms >= q2Start && lap.time_ms < q3Start;
+        const isQ3Lap = lap.time_ms >= q3Start;
+        
+        // Only count laps from the CURRENT phase (matching how F1 qualifying works)
+        // Q1 standings show Q1 times only
+        // Q2 standings show Q2 times only (for drivers who made it through Q1)
+        // Q3 standings show Q3 times only (for drivers who made it through Q2)
+        
+        if (currentPhaseName === 'Q1' && isQ1Lap) {
+          if (bestTime === null || lap.lap_time_ms < bestTime) {
+            bestTime = lap.lap_time_ms;
+            bestTimeStr = lap.lap_time;
+          }
+        } else if (currentPhaseName === 'Q2') {
+          if (isQ1Eliminated) {
+            // Eliminated drivers keep their Q1 time for display
+            if (isQ1Lap) {
+              if (bestTime === null || lap.lap_time_ms < bestTime) {
+                bestTime = lap.lap_time_ms;
+                bestTimeStr = lap.lap_time;
+              }
+            }
+          } else {
+            // Active drivers: show Q2 times if available, otherwise Q1 times
+            if (isQ2Lap) {
+              if (bestTime === null || lap.lap_time_ms < bestTime) {
+                bestTime = lap.lap_time_ms;
+                bestTimeStr = lap.lap_time;
+              }
+            } else if (isQ1Lap && bestTime === null) {
+              // Fall back to Q1 time only if no Q2 time yet
+              if (bestTime === null || lap.lap_time_ms < bestTime) {
+                bestTime = lap.lap_time_ms;
+                bestTimeStr = lap.lap_time;
+              }
+            }
+          }
+        } else if (currentPhaseName === 'Q3') {
+          if (isQ1Eliminated || isQ2Eliminated) {
+            // Eliminated drivers keep their best time from when they were eliminated
+            if (isQ1Eliminated && isQ1Lap) {
+              if (bestTime === null || lap.lap_time_ms < bestTime) {
+                bestTime = lap.lap_time_ms;
+                bestTimeStr = lap.lap_time;
+              }
+            } else if (isQ2Eliminated && (isQ1Lap || isQ2Lap)) {
+              if (bestTime === null || lap.lap_time_ms < bestTime) {
+                bestTime = lap.lap_time_ms;
+                bestTimeStr = lap.lap_time;
+              }
+            }
+          } else {
+            // Q3 drivers: show Q3 times if available, otherwise Q2 times
+            if (isQ3Lap) {
+              if (bestTime === null || lap.lap_time_ms < bestTime) {
+                bestTime = lap.lap_time_ms;
+                bestTimeStr = lap.lap_time;
+              }
+            } else if ((isQ1Lap || isQ2Lap) && bestTime === null) {
+              // Fall back to earlier times only if no Q3 time yet
+              if (bestTime === null || lap.lap_time_ms < bestTime) {
+                bestTime = lap.lap_time_ms;
+                bestTimeStr = lap.lap_time;
+              }
+            }
+          }
+        }
+      }
+      
+      this.liveQualifyingState.set(result.abbreviation, {
+        bestTime,
+        bestTimeStr,
+        eliminated: isEliminated,
+        eliminatedIn: isQ1Eliminated ? 'Q1' : (isQ2Eliminated ? 'Q2' : null)
+      });
+    }
+  }
+
+  /**
+   * Calculate Q1 eliminations - use official results from API
+   */
+  private calculateQ1Eliminations(): void {
+    if (!this.qualifyingData) return;
+    
+    // Use official elimination data from API results
+    this.q1EliminatedDrivers.clear();
+    for (const result of this.qualifyingData.results) {
+      if (result.eliminated_in === 'Q1') {
+        this.q1EliminatedDrivers.add(result.abbreviation);
+      }
+    }
+  }
+
+  /**
+   * Calculate Q2 eliminations - use official results from API
+   */
+  private calculateQ2Eliminations(): void {
+    if (!this.qualifyingData) return;
+    
+    // Use official elimination data from API results
+    this.q2EliminatedDrivers.clear();
+    for (const result of this.qualifyingData.results) {
+      if (result.eliminated_in === 'Q2') {
+        this.q2EliminatedDrivers.add(result.abbreviation);
+      }
+    }
+  }
+
+  /**
+   * Get the current live position and time for a driver
+   */
+  getLiveQualifyingPosition(driverCode: string): { position: number; time: string | null; eliminated: boolean } {
+    if (!this.qualifyingData || this.liveQualifyingState.size === 0) {
+      return { position: 99, time: null, eliminated: false };
+    }
+    
+    // Sort drivers by best time
+    const standings = Array.from(this.liveQualifyingState.entries())
+      .map(([driver, state]) => ({ driver, ...state }))
+      .sort((a, b) => {
+        // Eliminated drivers go to the end
+        if (a.eliminated && !b.eliminated) return 1;
+        if (!a.eliminated && b.eliminated) return -1;
+        // No time goes after those with times
+        if (a.bestTime === null && b.bestTime !== null) return 1;
+        if (a.bestTime !== null && b.bestTime === null) return -1;
+        if (a.bestTime === null && b.bestTime === null) return 0;
+        return a.bestTime! - b.bestTime!;
+      });
+    
+    const idx = standings.findIndex(s => s.driver === driverCode);
+    const state = this.liveQualifyingState.get(driverCode);
+    
+    return {
+      position: idx >= 0 ? idx + 1 : 99,
+      time: state?.bestTimeStr || null,
+      eliminated: state?.eliminated || false
+    };
   }
 
   setTrackCenterline(centerline: { x: number[]; y: number[] }): void {
@@ -230,8 +596,13 @@ export class Leaderboard {
    * Reset all entry elements to force re-render with updated team data
    */
   resetEntries(): void {
-    for (const element of this.entryElements.values()) {
-      delete element.dataset.initialized;
+    // Clear the entry elements map - they'll be recreated on next updateDOM
+    this.entryElements.clear();
+    
+    // Clear the entries container
+    const entriesContainer = this.container.querySelector('.leaderboard-entries');
+    if (entriesContainer) {
+      entriesContainer.innerHTML = '';
     }
   }
 
@@ -288,6 +659,13 @@ export class Leaderboard {
   }
 
   updateFromFrame(frame: TelemetryFrame): void {
+    // For qualifying, update live state based on frame time
+    // frame.t is typically in seconds from session start
+    if (this.sessionMode === 'qualifying' && this.qualifyingData && frame.t !== undefined) {
+      const sessionTimeMs = frame.t * 1000; // Convert seconds to milliseconds
+      this.updateQualifyingTime(sessionTimeMs);
+    }
+    
     const driver_progress: { [code: string]: { progress_m: number; distanceFrom: number } } = {};
 
     for (const [code, pos] of Object.entries(frame.drivers)) {
@@ -321,6 +699,9 @@ export class Leaderboard {
       // Update pit state machine for this driver
       const pitState = this.updateDriverPitState(code, distanceFrom, speed);
 
+      // Get qualifying data if available
+      const qualiResult = this.qualifyingResultsMap.get(code);
+      
       entries.push({
         code,
         color,
@@ -332,10 +713,40 @@ export class Leaderboard {
         speed: speed,
         isOut: pos.rel_dist === 1,
         pitState: pitState,
+        // Add qualifying fields if available
+        q1Time: qualiResult?.q1_time,
+        q2Time: qualiResult?.q2_time,
+        q3Time: qualiResult?.q3_time,
+        eliminatedIn: qualiResult?.eliminated_in,
       });
     }
 
-    entries.sort((a, b) => b.progress_m - a.progress_m);
+    // Sort entries based on session mode
+    if (this.sessionMode === 'qualifying' && this.liveQualifyingState.size > 0) {
+      // In qualifying, sort by best lap time (from live standings)
+      entries.sort((a, b) => {
+        const aState = this.liveQualifyingState.get(a.code);
+        const bState = this.liveQualifyingState.get(b.code);
+        
+        // Eliminated drivers go to the bottom
+        const aEliminated = aState?.eliminated || false;
+        const bEliminated = bState?.eliminated || false;
+        if (aEliminated && !bEliminated) return 1;
+        if (!aEliminated && bEliminated) return -1;
+        
+        const aTime = aState?.bestTime ?? Infinity;
+        const bTime = bState?.bestTime ?? Infinity;
+        
+        // No time = bottom of non-eliminated
+        if (aTime === Infinity && bTime !== Infinity) return 1;
+        if (aTime !== Infinity && bTime === Infinity) return -1;
+        
+        return aTime - bTime;
+      });
+    } else {
+      // In race mode, sort by progress on track
+      entries.sort((a, b) => b.progress_m - a.progress_m);
+    }
 
     this.entries = entries;
     
@@ -378,11 +789,15 @@ export class Leaderboard {
     const leaderboardEl = this.container.querySelector('.leaderboard-entries') as HTMLElement;
     if (!leaderboardEl) return;
 
-    const entryHeight = 28;
+    const entryHeight = 28; // Keep it compact like race mode
     leaderboardEl.style.height = `${this.entries.length * entryHeight}px`;
+
+    // Get elimination zone for current phase
+    const eliminationZone = this.getEliminationZone();
 
     this.entries.forEach((entry, index) => {
       let entryEl = this.entryElements.get(entry.code);
+      const displayPosition = index + 1;
 
       if (!entryEl) {
         entryEl = document.createElement('div');
@@ -410,36 +825,76 @@ export class Leaderboard {
 
       const isSelected = entry.code === this.selectedCode;
       const isLeader = index === 0;
-      entryEl.className = `leaderboard-entry ${entry.isOut ? 'out' : ''} ${isSelected ? 'selected' : ''} ${isLeader ? 'leader' : ''}`;
+      
+      // Qualifying-specific: check if in elimination zone (danger zone) and eliminated status
+      const liveStateForClass = this.liveQualifyingState.get(entry.code);
+      // Only mark as eliminated if explicitly set in live state (not just undefined)
+      const isInDangerZone = this.sessionMode === 'qualifying' && eliminationZone.includes(displayPosition) && liveStateForClass?.eliminated !== true;
+      const isEliminated = this.sessionMode === 'qualifying' && liveStateForClass?.eliminated === true;
+      
+      
+      // In race mode, 'out' means DNF. In qualifying, we don't use 'out' (we use 'eliminated' instead)
+      const showOut = this.sessionMode === 'race' && entry.isOut;
+      entryEl.className = `leaderboard-entry ${showOut ? 'out' : ''} ${isSelected ? 'selected' : ''} ${isLeader ? 'leader' : ''} ${isInDangerZone ? 'danger-zone' : ''} ${isEliminated ? 'eliminated' : ''}`;
       
       entryEl.style.setProperty('--driver-rgb', `${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]}`);
       
-      // Build the expected innerHTML
-      const expectedHTML = `
-        <div class="driver-left">
-          <div class="position">${index + 1}</div>
-          <span class="team-color-line ${teamColorClass}"></span>
-          ${teamLogoPath ? `<img src="${teamLogoPath}" alt="${entry.code} team" class="team-logo" />` : ''}
-          <div class="driver-code">
-            ${entry.code}
+      // Build the expected innerHTML - different for qualifying vs race
+      let expectedHTML: string;
+      
+      if (this.sessionMode === 'qualifying') {
+        // Get LIVE qualifying state for this driver (not final results)
+        const liveState = this.liveQualifyingState.get(entry.code);
+        const isEliminated = liveState?.eliminated || false;
+        
+        // Use live best time, not final results
+        // Show full lap time format (e.g., "1:23.456")
+        const bestTime = liveState?.bestTimeStr || '-';
+        
+        expectedHTML = `
+          <div class="driver-left">
+            <div class="position">${displayPosition}</div>
+            <span class="team-color-line ${teamColorClass}"></span>
+            ${teamLogoPath ? `<img src="${teamLogoPath}" alt="${entry.code} team" class="team-logo" />` : ''}
+            <div class="driver-code">${entry.code}</div>
           </div>
-        </div>
-        <div class="driver-right">
-          <span class="pit-label" 
-                data-state="${entry.pitState}"
-                style="color: rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})">
-          </span>
-          <div class="indicators">
-            <div class="drs-indicator ${isDrsActive ? 'active' : ''}" 
-                 title="DRS ${isDrsActive ? 'Active' : 'Inactive'}">
-            </div>
+          <div class="driver-right quali-times">
+            ${isEliminated ? `<span class="eliminated-label">OUT</span>` : ''}
+            <span class="quali-time best-time">${bestTime}</span>
             <img src="${tyreImagePath}" 
                  alt="${tyreName}"
                  class="tyre-indicator"
                  title="${tyreName}" />
           </div>
-        </div>
-      `;
+        `;
+      } else {
+        // Race mode - original layout
+        expectedHTML = `
+          <div class="driver-left">
+            <div class="position">${displayPosition}</div>
+            <span class="team-color-line ${teamColorClass}"></span>
+            ${teamLogoPath ? `<img src="${teamLogoPath}" alt="${entry.code} team" class="team-logo" />` : ''}
+            <div class="driver-code">
+              ${entry.code}
+            </div>
+          </div>
+          <div class="driver-right">
+            <span class="pit-label" 
+                  data-state="${entry.pitState}"
+                  style="color: rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})">
+            </span>
+            <div class="indicators">
+              <div class="drs-indicator ${isDrsActive ? 'active' : ''}" 
+                   title="DRS ${isDrsActive ? 'Active' : 'Inactive'}">
+              </div>
+              <img src="${tyreImagePath}" 
+                   alt="${tyreName}"
+                   class="tyre-indicator"
+                   title="${tyreName}" />
+            </div>
+          </div>
+        `;
+      }
       
       // Only update innerHTML if it's the first time or structure changed
       if (!entryEl.dataset.initialized) {
@@ -448,88 +903,131 @@ export class Leaderboard {
       }
       
       // Update dynamic elements separately to preserve transitions
-      const pitLabel = entryEl.querySelector('.pit-label') as HTMLElement;
-      if (pitLabel) {
-        const previousState = pitLabel.dataset.state as PitState || 'NONE';
-        const currentState = entry.pitState;
-        
-        // Update color
-        pitLabel.style.color = `rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})`;
-        
-        // Handle state transitions with fade effects
-        if (previousState !== currentState) {
-          // State has changed - need to handle transition
+      // Only update pit-related elements in race mode
+      if (this.sessionMode === 'race') {
+        const pitLabel = entryEl.querySelector('.pit-label') as HTMLElement;
+        if (pitLabel) {
+          const previousState = pitLabel.dataset.state as PitState || 'NONE';
+          const currentState = entry.pitState;
           
-          if (currentState === 'NONE') {
-            // Fading out (PIT_EXIT → NONE or IN_PIT → NONE)
-            pitLabel.classList.remove('visible');
-            // Clear text after fade completes
-            setTimeout(() => {
-              if (pitLabel.dataset.state === 'NONE') {
-                pitLabel.textContent = '';
-              }
-            }, 300); // Match CSS transition duration
-          } else if (previousState === 'NONE') {
-            // Fading in (NONE → IN_PIT or NONE → PIT_EXIT)
-            const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
-            pitLabel.textContent = newText;
-            // Trigger reflow to ensure transition works
-            pitLabel.offsetHeight;
-            pitLabel.classList.add('visible');
-          } else {
-            // Text is changing (IN_PIT → PIT_EXIT or PIT_EXIT → IN_PIT)
-            // Fade out, change text, fade in
-            pitLabel.classList.remove('visible');
-            setTimeout(() => {
+          // Update color
+          pitLabel.style.color = `rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})`;
+          
+          // Handle state transitions with fade effects
+          if (previousState !== currentState) {
+            // State has changed - need to handle transition
+            
+            if (currentState === 'NONE') {
+              // Fading out (PIT_EXIT → NONE or IN_PIT → NONE)
+              pitLabel.classList.remove('visible');
+              // Clear text after fade completes
+              setTimeout(() => {
+                if (pitLabel.dataset.state === 'NONE') {
+                  pitLabel.textContent = '';
+                }
+              }, 300); // Match CSS transition duration
+            } else if (previousState === 'NONE') {
+              // Fading in (NONE → IN_PIT or NONE → PIT_EXIT)
               const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
               pitLabel.textContent = newText;
-              pitLabel.dataset.state = currentState;
-              // Trigger reflow
+              // Trigger reflow to ensure transition works
               pitLabel.offsetHeight;
               pitLabel.classList.add('visible');
-            }, 300); // Match CSS transition duration
+            } else {
+              // Text is changing (IN_PIT → PIT_EXIT or PIT_EXIT → IN_PIT)
+              // Fade out, change text, fade in
+              pitLabel.classList.remove('visible');
+              setTimeout(() => {
+                const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
+                pitLabel.textContent = newText;
+                pitLabel.dataset.state = currentState;
+                // Trigger reflow
+                pitLabel.offsetHeight;
+                pitLabel.classList.add('visible');
+              }, 300); // Match CSS transition duration
+            }
+          }
+          
+          // Update state tracking
+          pitLabel.dataset.state = currentState;
+          
+          // Handle OUT status - show in pit-label area
+          if (entry.isOut) {
+            if (pitLabel.textContent !== 'OUT') {
+              pitLabel.textContent = 'OUT';
+              pitLabel.style.color = 'rgba(255, 255, 255, 0.7)';  // White 70%
+              pitLabel.classList.add('visible');
+            }
+          } else if (pitLabel.textContent === 'OUT') {
+            // Clear OUT status if driver is back (shouldn't happen often)
+            pitLabel.classList.remove('visible');
+            pitLabel.textContent = '';
           }
         }
-        
-        // Update state tracking
-        pitLabel.dataset.state = currentState;
-      }
-      
-      // Handle OUT status - show in pit-label area
-      if (entry.isOut) {
-        if (pitLabel.textContent !== 'OUT') {
-          pitLabel.textContent = 'OUT';
-          pitLabel.style.color = 'rgba(255, 255, 255, 0.7)';  // White 70%
-          pitLabel.classList.add('visible');
-        }
-      } else if (pitLabel.textContent === 'OUT') {
-        // Clear OUT status if driver is back (shouldn't happen often)
-        pitLabel.classList.remove('visible');
-        pitLabel.textContent = '';
       }
       
       // Update position number
       const positionEl = entryEl.querySelector('.position');
       if (positionEl) {
-        positionEl.textContent = `${index + 1}`;
+        positionEl.textContent = `${displayPosition}`;
       }
       
-      // Update DRS indicator
-      const drsIndicator = entryEl.querySelector('.drs-indicator');
-      if (drsIndicator) {
-        if (isDrsActive) {
-          drsIndicator.classList.add('active');
-        } else {
-          drsIndicator.classList.remove('active');
+      // Update DRS and tyre indicators (race mode only)
+      if (this.sessionMode === 'race') {
+        const drsIndicator = entryEl.querySelector('.drs-indicator');
+        if (drsIndicator) {
+          if (isDrsActive) {
+            drsIndicator.classList.add('active');
+          } else {
+            drsIndicator.classList.remove('active');
+          }
+        }
+        
+        const tyreIndicator = entryEl.querySelector('.tyre-indicator') as HTMLImageElement;
+        if (tyreIndicator && tyreIndicator.src !== tyreImagePath) {
+          tyreIndicator.src = tyreImagePath;
+          tyreIndicator.alt = tyreName;
+          tyreIndicator.title = tyreName;
         }
       }
       
-      // Update tyre indicator
-      const tyreIndicator = entryEl.querySelector('.tyre-indicator') as HTMLImageElement;
-      if (tyreIndicator && tyreIndicator.src !== tyreImagePath) {
-        tyreIndicator.src = tyreImagePath;
-        tyreIndicator.alt = tyreName;
-        tyreIndicator.title = tyreName;
+      // Update qualifying times (qualifying mode only)
+      if (this.sessionMode === 'qualifying') {
+        const qualiTimeEl = entryEl.querySelector('.quali-time.best-time');
+        
+        if (qualiTimeEl) {
+          // Use LIVE state for times - show full lap time format (e.g., "1:23.456")
+          const liveState = this.liveQualifyingState.get(entry.code);
+          const bestTime = liveState?.bestTimeStr || '-';
+          qualiTimeEl.textContent = bestTime;
+        }
+        
+        // Update tyre indicator in qualifying mode too
+        const tyreIndicator = entryEl.querySelector('.tyre-indicator') as HTMLImageElement;
+        if (tyreIndicator && tyreIndicator.src !== tyreImagePath) {
+          tyreIndicator.src = tyreImagePath;
+          tyreIndicator.alt = tyreName;
+          tyreIndicator.title = tyreName;
+        }
+        
+        // Update eliminated label visibility
+        const liveState = this.liveQualifyingState.get(entry.code);
+        const isEliminated = liveState?.eliminated || false;
+        let eliminatedLabel = entryEl.querySelector('.eliminated-label');
+        
+        if (isEliminated && !eliminatedLabel) {
+          // Add eliminated label if not present
+          const rightDiv = entryEl.querySelector('.driver-right');
+          if (rightDiv) {
+            const label = document.createElement('span');
+            label.className = 'eliminated-label';
+            label.textContent = 'OUT';
+            rightDiv.insertBefore(label, rightDiv.firstChild);
+          }
+        } else if (!isEliminated && eliminatedLabel) {
+          // Remove eliminated label if present but driver not eliminated
+          eliminatedLabel.remove();
+        }
       }
     });
 
@@ -543,16 +1041,32 @@ export class Leaderboard {
   }
 
   private render(): void {
-    this.container.innerHTML = `
-      <div class="leaderboard">
-        <div class="leaderboard-header">
-          <img src="/images/logos/F1.svg" alt="F1" class="f1-logo" />
+    if (this.sessionMode === 'qualifying') {
+      this.container.innerHTML = `
+        <div class="leaderboard qualifying-mode">
+          <div class="leaderboard-header">
+            <img src="/images/logos/F1.svg" alt="F1" class="f1-logo" />
+          </div>
+          <div class="quali-header">
+            <span class="quali-phase q1">${this.currentPhase}</span>
+            <span class="quali-timer">--:--</span>
+          </div>
+          <div class="race-flag-banner"></div>
+          <div class="leaderboard-entries"></div>
         </div>
-        <div class="lap-counter"><span class="lap-label">LAP </span><span class="lap-current">0</span><span class="lap-total">/ 0</span></div>
-        <div class="race-flag-banner"></div>
-        <div class="leaderboard-entries"></div>
-      </div>
-    `;
+      `;
+    } else {
+      this.container.innerHTML = `
+        <div class="leaderboard">
+          <div class="leaderboard-header">
+            <img src="/images/logos/F1.svg" alt="F1" class="f1-logo" />
+          </div>
+          <div class="lap-counter"><span class="lap-label">LAP </span><span class="lap-current">0</span><span class="lap-total">/ 0</span></div>
+          <div class="race-flag-banner"></div>
+          <div class="leaderboard-entries"></div>
+        </div>
+      `;
+    }
   }
 
   show(): void {

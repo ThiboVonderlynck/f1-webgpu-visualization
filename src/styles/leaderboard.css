@@ -60,7 +60,8 @@
 
 .leaderboard-header {
   background: black;
-  padding: 12px 15px;
+  padding: 8px 15px;
+  /* Compact like quali-header */
   border-bottom: 2px solid rgba(255, 255, 255, 0.2);
   text-align: center;
 }
@@ -257,7 +258,7 @@
 
 /* First place */
 .leaderboard-entry.leader .position {
-  background: #D31411 !important;
+  background: #E10600 !important;
   color: white;
 }
 
@@ -408,6 +409,161 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* ============================================================================
+   QUALIFYING MODE STYLES
+   ============================================================================ */
+
+/* Qualifying Mode Styles */
+.leaderboard.qualifying-mode {
+  width: 240px;
+  /* Same as race mode */
+}
+
+/* Qualifying Header */
+.quali-header {
+  background: black;
+  padding: 8px 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.9em;
+  /* Match lap-counter */
+}
+
+.quali-timer {
+  font-family: 'Titillium Web', 'Arial', sans-serif;
+  font-weight: 700;
+  font-size: 1em;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.quali-timer.warning {
+  color: #FFD700;
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+
+.quali-timer.ended {
+  color: #E10600;
+}
+
+@keyframes timer-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.quali-phase {
+  font-family: 'Titillium Web', 'Arial', sans-serif;
+  font-weight: 400;
+  font-size: 1em;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+/* Qualifying Entry Styles */
+.qualifying-mode .leaderboard-entry {
+  height: 28px;
+}
+
+.qualifying-mode .driver-left {
+  height: 28px;
+}
+
+.qualifying-mode .driver-right {
+  height: 28px;
+}
+
+/* Qualifying Times Display */
+.driver-right.quali-times {
+  min-width: 70px;
+  /* Same as race mode's .driver-right */
+  gap: 6px;
+  /* Same as race mode */
+}
+
+.quali-time {
+  font-family: 'Titillium Web', 'Arial', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: #fff;
+}
+
+.quali-time.best-time {
+  font-weight: 400;
+}
+
+/* Eliminated Label */
+.eliminated-label {
+  font-family: 'Titillium Web', 'Arial', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.2);
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 0.5px;
+}
+
+/* Danger Zone (elimination zone) */
+.leaderboard-entry.danger-zone {
+  background: linear-gradient(to right, rgba(255, 68, 68, 0.15), rgba(255, 68, 68, 0.25)) !important;
+}
+
+.leaderboard-entry.danger-zone .position {
+  background: rgba(255, 68, 68, 0.3);
+  color: #ff6b6b;
+}
+
+.leaderboard-entry.danger-zone:hover {
+  background: linear-gradient(to right, rgba(255, 68, 68, 0.25), rgba(255, 68, 68, 0.35)) !important;
+}
+
+/* Eliminated Driver */
+.leaderboard-entry.eliminated {
+  opacity: 0.6;
+}
+
+.leaderboard-entry.eliminated .driver-code {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.leaderboard-entry.eliminated .quali-time {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Safe Zone (top positions) - subtle green tint for pole position */
+.qualifying-mode .leaderboard-entry.leader {
+  background: linear-gradient(to right, rgba(0, 200, 0, 0.1), transparent) !important;
+}
+
+.qualifying-mode .leaderboard-entry.leader .position {
+  background: #E10600;
+  color: white;
+}
+
+/* Sector Colors (for future sector timing widget) */
+.sector-purple {
+  color: #A020F0 !important;
+  text-shadow: 0 0 5px rgba(160, 32, 240, 0.5);
+}
+
+.sector-green {
+  color: #00FF00 !important;
+}
+
+.sector-yellow {
+  color: #FFD700 !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .leaderboard {
@@ -423,5 +579,13 @@
   .driver-right {
     min-width: 60px;
     font-size: 12px;
+  }
+
+  .leaderboard.qualifying-mode {
+    width: 240px;
+  }
+
+  .quali-time {
+    font-size: 11px;
   }
 }

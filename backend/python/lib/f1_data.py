@@ -232,13 +232,141 @@ def get_circuit_rotation(session):
         print(f"Error getting circuit rotation: {e}")
         return 0
 
+def get_qualifying_metadata(session, telemetry_start_offset_ms=0):
+    """
+    Extract qualifying-specific metadata (Q1/Q2/Q3 times, sectors, etc.)
+    Returns qualifying data structure for TV-like display with frame-accurate timing
+    
+    Args:
+        session: FastF1 session object
+        telemetry_start_offset_ms: Offset in ms from session start to telemetry t=0
+                                   All times will be adjusted relative to telemetry start
+    """
+    import pandas as pd
+    
+    try:
+        results = session.results
+        laps = session.laps
+        session_status = session.session_status
+        
+        def format_time(td):
+            if pd.isna(td):
+                return None
+            total_seconds = td.total_seconds()
+            minutes = int(total_seconds // 60)
+            seconds = total_seconds % 60
+            return f"{minutes}:{seconds:06.3f}"
+        
+        def time_to_ms(td, is_timestamp=True):
+            """Convert timedelta to milliseconds
+            
+            Args:
+                td: timedelta to convert
+                is_timestamp: If True, adjust for telemetry start offset (for event times)
+                             If False, return raw duration (for lap times, sector times)
+            """
+            if pd.isna(td):
+                return None
+            raw_ms = int(td.total_seconds() * 1000)
+            if is_timestamp:
+                # Return time relative to telemetry start (t=0)
+                return raw_ms - telemetry_start_offset_ms
+            else:
+                # Return raw duration (for lap times, sector times)
+                return raw_ms
+        
+        # Extract Q1/Q2/Q3 phase timing from session status
+        # Session status has 'Started' and 'Finished' for each phase
+        phase_timing = []
+        started_times = session_status[session_status['Status'] == 'Started']['Time'].tolist()
+        finished_times = session_status[session_status['Status'] == 'Finished']['Time'].tolist()
+        
+        phase_names = ['Q1', 'Q2', 'Q3']
+        for i, name in enumerate(phase_names):
+            if i < len(started_times) and i < len(finished_times):
+                phase_timing.append({
+                    "name": name,
+                    "start_ms": time_to_ms(started_times[i]),
+                    "end_ms": time_to_ms(finished_times[i]),
+                    "elimination_positions": [16, 17, 18, 19, 20] if name == 'Q1' else ([11, 12, 13, 14, 15] if name == 'Q2' else [])
+                })
+        
+        # Build results with Q1/Q2/Q3 times
+        quali_results = []
+        for _, row in results.sort_values('Position').iterrows():
+            driver_data = {
+                "position": int(row['Position']) if pd.notna(row['Position']) else 99,
+                "driver_number": int(row['DriverNumber']) if pd.notna(row['DriverNumber']) else 0,
+                "abbreviation": row['Abbreviation'],
+                "full_name": row['BroadcastName'] if pd.notna(row['BroadcastName']) else row['Abbreviation'],
+                "team_name": row['TeamName'],
+                "team_color": row['TeamColor'] if pd.notna(row['TeamColor']) else 'FFFFFF',
+                "q1_time": format_time(row['Q1']),
+                "q1_time_ms": time_to_ms(row['Q1'], is_timestamp=False),  # Duration, not timestamp
+                "q2_time": format_time(row['Q2']),
+                "q2_time_ms": time_to_ms(row['Q2'], is_timestamp=False),  # Duration, not timestamp
+                "q3_time": format_time(row['Q3']),
+                "q3_time_ms": time_to_ms(row['Q3'], is_timestamp=False),  # Duration, not timestamp
+                "eliminated_in": "Q1" if row['Position'] > 15 else ("Q2" if row['Position'] > 10 else None)
+            }
+            quali_results.append(driver_data)
+        
+        # Find best sectors across all drivers
+        valid_laps = laps[laps['Deleted'] == False] if 'Deleted' in laps.columns else laps
+        sector_bests = {}
+        
+        for sector_col, sector_name in [('Sector1Time', 'sector1'), ('Sector2Time', 'sector2'), ('Sector3Time', 'sector3')]:
+            if sector_col in valid_laps.columns:
+                sector_times = valid_laps[valid_laps[sector_col].notna()]
+                if not sector_times.empty:
+                    best_idx = sector_times[sector_col].idxmin()
+                    best_lap = sector_times.loc[best_idx]
+                    sector_bests[sector_name] = {
+                        "time": format_time(best_lap[sector_col]),
+                        "driver": best_lap['Driver']
+                    }
+        
+        # Build lap timeline with frame timing for live updates
+        lap_events = []
+        for _, lap in laps.sort_values('Time').iterrows():
+            if pd.notna(lap['LapTime']):
+                lap_event = {
+                    "driver": lap['Driver'],
+                    "lap_number": int(lap['LapNumber']),
+                    "time_ms": time_to_ms(lap['Time']),  # When this lap was completed (timestamp)
+                    "lap_time": format_time(lap['LapTime']),
+                    "lap_time_ms": time_to_ms(lap['LapTime'], is_timestamp=False),  # Duration, not timestamp
+                    "sector1": format_time(lap['Sector1Time']) if pd.notna(lap.get('Sector1Time')) else None,
+                    "sector2": format_time(lap['Sector2Time']) if pd.notna(lap.get('Sector2Time')) else None,
+                    "sector3": format_time(lap['Sector3Time']) if pd.notna(lap.get('Sector3Time')) else None,
+                    "is_personal_best": bool(lap['IsPersonalBest']) if pd.notna(lap.get('IsPersonalBest')) else False,
+                    "deleted": bool(lap['Deleted']) if pd.notna(lap.get('Deleted')) else False,
+                    "compound": lap['Compound'] if pd.notna(lap.get('Compound')) else 'UNKNOWN',
+                }
+                lap_events.append(lap_event)
+        
+        return {
+            "session_type": "qualifying",
+            "session_phases": phase_timing,
+            "results": quali_results,
+            "sector_bests": sector_bests,
+            "lap_events": lap_events,
+        }
+        
+    except Exception as e:
+        print(f"Error extracting qualifying metadata: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def get_race_telemetry(session, session_type='R', use_cache=True):
     """
     Get telemetry for all drivers (reference solution pattern)
     Returns data structure ready for JSON export
     """
     event_name = str(session).replace(' ', '_')
-    cache_suffix = 'sprint' if session_type == 'S' else 'race'
+    cache_suffix = 'qualifying' if session_type == 'Q' else ('sprint' if session_type == 'S' else 'race')
     
     # Check cache (JSON instead of pickle)
     lib_dir = os.path.dirname(os.path.abspath(__file__))
@@ -293,6 +421,26 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     
     if not driver_data:
         raise ValueError("No valid telemetry data found")
+    
+    # For qualifying sessions, extend time range to cover full session
+    # The lap telemetry might end before the session actually ends
+    if session_type == 'Q':
+        try:
+            # Get the actual session end time from position data (more reliable)
+            pos_data = session.pos_data
+            if pos_data:
+                session_end_times = []
+                for driver_no, driver_df in pos_data.items():
+                    if 'SessionTime' in driver_df.columns:
+                        session_end_times.append(driver_df['SessionTime'].max().total_seconds())
+                
+                if session_end_times:
+                    actual_session_end = max(session_end_times)
+                    if actual_session_end > global_t_max:
+                        print(f"✓ Extending qualifying time range: {global_t_max:.1f}s → {actual_session_end:.1f}s")
+                        global_t_max = actual_session_end
+        except Exception as e:
+            print(f"Warning: Could not extend qualifying time range: {e}")
     
     # Create timeline
     timeline = np.arange(global_t_min, global_t_max, DT) - global_t_min
@@ -479,7 +627,22 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         "driver_colors": driver_colors,
         "driver_teams": team_info,
         "total_laps": int(max_lap_number),
+        "session_type": session_type,
     }
+    
+    # Add qualifying-specific metadata for Q sessions
+    if session_type == 'Q':
+        # Calculate telemetry start offset - the SessionTime at which telemetry t=0 occurs
+        # This is the global_t_min from lap telemetry, NOT from position data
+        # The offset is needed to align lap events and phase times with telemetry frames
+        telemetry_start_offset_ms = int(global_t_min * 1000)
+        print(f"✓ Telemetry start offset: {telemetry_start_offset_ms}ms ({global_t_min:.1f}s)")
+        
+        quali_metadata = get_qualifying_metadata(session, telemetry_start_offset_ms)
+        if quali_metadata:
+            result["qualifying"] = quali_metadata
+            result["telemetry_start_offset_ms"] = telemetry_start_offset_ms
+            print("✓ Qualifying metadata extracted")
     
     # Save cache
     if use_cache:

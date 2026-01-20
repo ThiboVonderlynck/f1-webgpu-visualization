@@ -366,6 +366,12 @@ app.post('/api/load', async (req, res) => {
     const extractedEvents = extractRaceEvents(frames);
     console.log(`📍 Extracted ${extractedEvents.length} events for WebSocket streaming`);
     
+    // Extract qualifying metadata if present
+    const qualifying = data.qualifying || null;
+    if (qualifying) {
+      console.log(`✓ Qualifying metadata: ${qualifying.results?.length || 0} drivers`);
+    }
+    
     global.currentTelemetry = {
       frames,
       driverColors,
@@ -373,7 +379,9 @@ app.post('/api/load', async (req, res) => {
       totalLaps,
       track,
       metadata: { year, round, sessionType },
-      events: extractedEvents
+      events: extractedEvents,
+      sessionType: data.session_type || sessionType,
+      qualifying
     };
 
     res.json({
@@ -426,7 +434,9 @@ wss.on('connection', (ws) => {
           driverColors: global.currentTelemetry.driverColors,
           driverTeams: global.currentTelemetry.driverTeams,
           totalLaps: global.currentTelemetry.totalLaps,
-          events: global.currentTelemetry.events
+          events: global.currentTelemetry.events,
+          sessionType: global.currentTelemetry.sessionType || 'R',
+          qualifying: global.currentTelemetry.qualifying
         }
       })
     );
