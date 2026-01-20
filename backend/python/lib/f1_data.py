@@ -3,6 +3,7 @@ import sys
 import fastf1
 import fastf1.plotting
 from multiprocessing import Pool, cpu_count
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import json
 from datetime import timedelta
@@ -396,16 +397,13 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     global_t_max = None
     max_lap_number = 0
     
-    # Sequential processing for Railway free tier (avoid OOM)
-    # Multiprocessing uses too much RAM even with 2 workers
-    print(f"Processing {len(drivers)} drivers sequentially...")
+    # Use threading instead of multiprocessing (shared memory = less RAM usage)
+    print(f"Processing {len(drivers)} drivers with threading (max 3 workers)...")
     driver_args = [(driver_no, session, driver_codes[driver_no]) for driver_no in drivers]
     
-    results = []
-    for i, args in enumerate(driver_args, 1):
-        print(f"[{i}/{len(driver_args)}] Processing driver {args[2]}...")
-        result = _process_single_driver(args)
-        results.append(result)
+    # Threading shares memory between workers, unlike multiprocessing
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        results = list(executor.map(_process_single_driver, driver_args))
     
     # Process results
     for result in results:
