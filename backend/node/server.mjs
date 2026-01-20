@@ -129,6 +129,31 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Serve telemetry files (so Vercel frontend can fetch from Railway backend)
+app.get('/data/telemetry/:year/:filename', (req, res) => {
+  const { year, filename } = req.params;
+  
+  // Security: Only allow .msgpack and .json files
+  if (!filename.endsWith('.msgpack') && !filename.endsWith('.json')) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid file type. Only .msgpack and .json allowed.'
+    });
+  }
+  
+  const filePath = path.join(__dirname, '../../public/data/telemetry', year, filename);
+  
+  if (!existsSync(filePath)) {
+    return res.status(404).json({
+      success: false,
+      error: 'File not found'
+    });
+  }
+  
+  console.log(`Serving telemetry file: ${filename}`);
+  res.sendFile(filePath);
+});
+
 app.get('/api/check/:year/:round/:sessionType', async (req, res) => {
   const { year, round, sessionType } = req.params;
 
