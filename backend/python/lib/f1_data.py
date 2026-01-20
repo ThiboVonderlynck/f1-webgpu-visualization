@@ -397,9 +397,10 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     max_lap_number = 0
     
     # Multiprocessing (reference solution pattern)
+    # Limit to 2 processes on Railway to avoid OOM (free tier has limited RAM)
     print(f"Processing {len(drivers)} drivers in parallel...")
     driver_args = [(driver_no, session, driver_codes[driver_no]) for driver_no in drivers]
-    num_processes = min(cpu_count(), len(drivers))
+    num_processes = min(2, len(drivers))  # Max 2 parallel processes to reduce memory usage
     
     with Pool(processes=num_processes) as pool:
         results = pool.map(_process_single_driver, driver_args)
