@@ -19,6 +19,9 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
+// Use virtualenv Python in production, fallback to python3 locally
+const PYTHON_CMD = existsSync('/opt/venv/bin/python3') ? '/opt/venv/bin/python3' : 'python3';
+
 // ============================================================================
 // Streaming Modes (for research: simulating different data sources)
 // ============================================================================
@@ -67,7 +70,7 @@ app.get('/api/races', async (req, res) => {
     console.log(`Fetching races for ${year}...`);
     
     const pythonScript = path.join(__dirname, '../python/get_races.py');
-    const command = `python3 "${pythonScript}" ${year}`;
+    const command = `${PYTHON_CMD} "${pythonScript}" ${year}`;
     
     const { stdout, stderr } = await execPromise(command, {
       timeout: 30000, // 30 second timeout
@@ -102,7 +105,7 @@ app.get('/api/sessions', async (req, res) => {
 
   try {
     const pythonScript = path.join(__dirname, '../python/get_sessions.py');
-    const command = `python3 "${pythonScript}" ${year} ${round}`;
+    const command = `${PYTHON_CMD} "${pythonScript}" ${year} ${round}`;
     
     const { stdout } = await execPromise(command, {
       timeout: 30000,
@@ -220,7 +223,7 @@ app.post('/api/fetch', async (req, res) => {
     console.log(`\nFetching F1 data: ${year} Round ${round} (${sessionType})`);
 
     const pythonScript = path.join(__dirname, '../python/fetch_race_data.py');
-    const command = `python3 "${pythonScript}" ${year} ${round} ${sessionType}`;
+    const command = `${PYTHON_CMD} "${pythonScript}" ${year} ${round} ${sessionType}`;
 
     console.log(`Executing: ${command}`);
 
