@@ -5,7 +5,7 @@
     "buildCommand": "cd backend/node && npm install && python -m venv /opt/venv && . /opt/venv/bin/activate && cd ../python && pip install -r requirements.txt"
   },
   "deploy": {
-    "startCommand": ". /opt/venv/bin/activate && cd backend/node && npm start",
+    "startCommand": "export LD_LIBRARY_PATH=/nix/store/*-gcc-*/lib:$LD_LIBRARY_PATH && . /opt/venv/bin/activate && cd backend/node && npm start",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

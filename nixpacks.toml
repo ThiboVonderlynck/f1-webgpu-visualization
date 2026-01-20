@@ -12,4 +12,4 @@ cmds = [
 ]
 
 [start]
-cmd = ". /opt/venv/bin/activate && cd backend/node && node server.mjs"
+cmd = "export LD_LIBRARY_PATH=/nix/store/*-gcc-*/lib:$LD_LIBRARY_PATH && . /opt/venv/bin/activate && cd backend/node && node server.mjs"
