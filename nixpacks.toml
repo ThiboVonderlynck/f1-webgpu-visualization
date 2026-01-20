@@ -2,13 +2,14 @@
 # This tells Railway to install both Node.js and Python
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "python311", "python311Packages.pip"]
+nixPkgs = ["nodejs_20", "python311"]
 
 [phases.install]
 cmds = [
   "cd backend/node && npm install",
-  "cd backend/python && pip install --user -r requirements.txt"
+  "python -m venv /opt/venv",
+  ". /opt/venv/bin/activate && cd backend/python && pip install -r requirements.txt"
 ]
 
 [start]
-cmd = "cd backend/node && node server.mjs"
+cmd = ". /opt/venv/bin/activate && cd backend/node && node server.mjs"
