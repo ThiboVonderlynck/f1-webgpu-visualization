@@ -117,7 +117,7 @@ export class WebSocketClient {
   private onModeChangeCallbacks: Array<(mode: string, config: any) => void> = [];
   private onModesReceivedCallbacks: Array<(modes: any, current: string) => void> = [];
 
-  constructor(url: string = 'ws://localhost:3001') {
+  constructor(url: string = import.meta.env.VITE_WS_URL || 'ws://localhost:3001') {
     this.url = url;
   }
 

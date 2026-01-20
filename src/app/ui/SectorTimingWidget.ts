@@ -3,7 +3,7 @@
  * Shows sector times with purple/green/yellow color coding
  */
 
-import type { QualifyingMetadata, SectorBest } from '../playback/websocketClient';
+import type { QualifyingMetadata } from '../playback/websocketClient';
 
 export type SectorStatus = 'purple' | 'green' | 'yellow' | 'none';
 

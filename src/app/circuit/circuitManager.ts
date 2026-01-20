@@ -3,14 +3,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TrackRenderer, type TrackData } from './trackRenderer.js';
 
 export class CircuitManager {
-  private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private controls: OrbitControls;
   private trackRenderer: TrackRenderer;
   private currentTrack: THREE.Group | null = null;
 
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) {
-    this.scene = scene;
     this.camera = camera;
     this.controls = controls;
     this.trackRenderer = new TrackRenderer(scene);

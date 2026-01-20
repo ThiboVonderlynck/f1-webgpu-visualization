@@ -1,0 +1,25 @@
+{
+  "name": "f1-visualization-backend",
+  "version": "1.0.0",
+  "description": "F1 WebGPU Visualization Backend Server",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["f1", "websocket", "telemetry"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@msgpack/msgpack": "^3.1.3",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "glob": "^13.0.0",
+    "stream-json": "^1.9.1",
+    "ws": "^8.19.0"
+  }
+}

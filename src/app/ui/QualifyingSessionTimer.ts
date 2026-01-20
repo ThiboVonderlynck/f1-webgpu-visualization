@@ -3,14 +3,13 @@
  * Shows Q1/Q2/Q3 indicator with session countdown timer
  */
 
-import type { QualifyingMetadata, QualifyingSessionPhase } from '../playback/websocketClient';
+import type { QualifyingMetadata } from '../playback/websocketClient';
 
 export class QualifyingSessionTimer {
   private container: HTMLElement;
   private currentPhase: 'Q1' | 'Q2' | 'Q3' = 'Q1';
   private timeRemaining: number = 0; // seconds
   private sessionStatus: 'active' | 'paused' | 'ended' = 'active';
-  private sectorBests: QualifyingMetadata['sector_bests'] = {};
   private timerInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(container: HTMLElement) {
@@ -54,8 +53,8 @@ export class QualifyingSessionTimer {
   /**
    * Set sector bests for display
    */
-  setSectorBests(bests: QualifyingMetadata['sector_bests']): void {
-    this.sectorBests = bests;
+  setSectorBests(_bests: QualifyingMetadata['sector_bests']): void {
+    // Reserved for future use
     this.updateDOM();
   }
 
