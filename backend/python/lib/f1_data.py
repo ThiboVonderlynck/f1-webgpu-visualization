@@ -366,7 +366,7 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     Returns data structure ready for JSON export
     """
     event_name = str(session).replace(' ', '_')
-    cache_suffix = 'qualifying' if session_type == 'Q' else ('sprint' if session_type == 'S' else 'race')
+    cache_suffix = 'qualifying' if session_type == 'Q' else ('sprint_qualifying' if session_type == 'SQ' else ('sprint' if session_type == 'S' else 'race'))
     
     # Check cache (JSON instead of pickle)
     lib_dir = os.path.dirname(os.path.abspath(__file__))
@@ -424,7 +424,9 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     
     # For qualifying sessions, extend time range to cover full session
     # The lap telemetry might end before the session actually ends
-    if session_type == 'Q':
+    # For qualifying sessions (Q and SQ), extend time range to cover full session
+    # The lap telemetry might end before the session actually ends
+    if session_type in ('Q', 'SQ'):
         try:
             # Get the actual session end time from position data (more reliable)
             pos_data = session.pos_data
@@ -437,7 +439,7 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
                 if session_end_times:
                     actual_session_end = max(session_end_times)
                     if actual_session_end > global_t_max:
-                        print(f"✓ Extending qualifying time range: {global_t_max:.1f}s → {actual_session_end:.1f}s")
+                        print(f"✓ Extending {'sprint ' if session_type == 'SQ' else ''}qualifying time range: {global_t_max:.1f}s → {actual_session_end:.1f}s")
                         global_t_max = actual_session_end
         except Exception as e:
             print(f"Warning: Could not extend qualifying time range: {e}")
@@ -631,7 +633,8 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     }
     
     # Add qualifying-specific metadata for Q sessions
-    if session_type == 'Q':
+    # Add qualifying-specific metadata for Q and SQ sessions
+    if session_type in ('Q', 'SQ'):
         # Calculate telemetry start offset - the SessionTime at which telemetry t=0 occurs
         # This is the global_t_min from lap telemetry, NOT from position data
         # The offset is needed to align lap events and phase times with telemetry frames
@@ -642,7 +645,7 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         if quali_metadata:
             result["qualifying"] = quali_metadata
             result["telemetry_start_offset_ms"] = telemetry_start_offset_ms
-            print("✓ Qualifying metadata extracted")
+            print(f"✓ {'Sprint ' if session_type == 'SQ' else ''}Qualifying metadata extracted")
     
     # Save cache
     if use_cache:

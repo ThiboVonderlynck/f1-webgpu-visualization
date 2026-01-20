@@ -58,6 +58,7 @@ export class Leaderboard {
   private qualifyingData: QualifyingMetadata | null = null;
   private currentPhase: 'Q1' | 'Q2' | 'Q3' = 'Q1';
   private qualifyingResultsMap: Map<string, QualifyingResult> = new Map();
+  private isSprintQualifying: boolean = false;
   
   // Live qualifying state (calculated from lap events up to current time)
   private liveQualifyingState: Map<string, {
@@ -85,10 +86,13 @@ export class Leaderboard {
 
   /**
    * Set qualifying metadata for TV-like display
+   * @param data - The qualifying metadata from the API
+   * @param isSprint - If true, display as Sprint Qualifying (SQ1/SQ2/SQ3)
    */
-  setQualifyingData(data: QualifyingMetadata): void {
+  setQualifyingData(data: QualifyingMetadata, isSprint: boolean = false): void {
     this.qualifyingData = data;
     this.sessionMode = 'qualifying';
+    this.isSprintQualifying = isSprint;
     
     // Reset all live qualifying state - IMPORTANT: start fresh!
     this.q1EliminatedDrivers.clear();
@@ -126,7 +130,9 @@ export class Leaderboard {
   private updatePhaseIndicator(): void {
     const phaseEl = this.container.querySelector('.quali-phase');
     if (phaseEl) {
-      phaseEl.textContent = this.currentPhase;
+      // Display SQ1/SQ2/SQ3 for Sprint Qualifying, Q1/Q2/Q3 for regular
+      const displayPhase = this.isSprintQualifying ? `S${this.currentPhase}` : this.currentPhase;
+      phaseEl.textContent = displayPhase;
       phaseEl.className = `quali-phase ${this.currentPhase.toLowerCase()}`;
     }
   }
@@ -1042,13 +1048,15 @@ export class Leaderboard {
 
   private render(): void {
     if (this.sessionMode === 'qualifying') {
+      // Display SQ1/SQ2/SQ3 for Sprint Qualifying, Q1/Q2/Q3 for regular
+      const displayPhase = this.isSprintQualifying ? `S${this.currentPhase}` : this.currentPhase;
       this.container.innerHTML = `
         <div class="leaderboard qualifying-mode">
           <div class="leaderboard-header">
             <img src="/images/logos/F1.svg" alt="F1" class="f1-logo" />
           </div>
           <div class="quali-header">
-            <span class="quali-phase q1">${this.currentPhase}</span>
+            <span class="quali-phase q1">${displayPhase}</span>
             <span class="quali-timer">--:--</span>
           </div>
           <div class="race-flag-banner"></div>

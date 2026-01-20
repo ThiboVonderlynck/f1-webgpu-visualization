@@ -141,10 +141,11 @@ async function initVisualization(trackData: TrackData) {
       leaderboard.resetEntries(); // Force re-render with team logos
     }
 
-    // Handle qualifying mode
-    if (metadata.sessionType === 'Q' && metadata.qualifying) {
-      console.log('🏁 Qualifying session detected - enabling qualifying mode');
-      leaderboard.setQualifyingData(metadata.qualifying);
+    // Handle qualifying mode (both regular Q and Sprint SQ)
+    if ((metadata.sessionType === 'Q' || metadata.sessionType === 'SQ') && metadata.qualifying) {
+      const isSprint = metadata.sessionType === 'SQ';
+      console.log(`🏁 ${isSprint ? 'Sprint ' : ''}Qualifying session detected - enabling qualifying mode`);
+      leaderboard.setQualifyingData(metadata.qualifying, isSprint);
     } else {
       // Ensure race mode for non-qualifying sessions
       leaderboard.setSessionMode('race');
