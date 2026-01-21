@@ -52,13 +52,22 @@ export class TrackRenderer {
   }
 
   async loadTrack(trackData: TrackData): Promise<void> {
+    console.log('🛤️ Starting track load...');
     this.clear();
+    
+    console.log('🛤️ Rendering track surface...');
     await this.renderTrackSurface(trackData);
+    
+    console.log('🛤️ Rendering boundaries...');
     await this.renderBoundaries(trackData.boundaries);
+    
+    console.log('🛤️ Rendering DRS zones...');
     this.renderDRSZones(trackData);
     
-    // Only render one visual line: prioritize grid_line (Starting Grid) over finish_line (Timing Line)
-    const primaryLine = trackData.grid_line || trackData.finish_line;
+    // Always use finish_line (timing line from fastest lap) - grid_line is incorrectly calculated
+    // from lap 1 telemetry which starts AT the timing line, not at the starting grid
+    const primaryLine = trackData.finish_line;
+    console.log('🛤️ Rendering finish line...', { hasFinishLine: !!trackData.finish_line, primaryLine });
     await this.renderLine(primaryLine, trackData.track_width, 'start-finish-line');
     
     console.log(`✓ Track rendered: ${trackData.centerline.x.length} points, ${trackData.drs_zones?.length || 0} DRS zones`);
@@ -299,13 +308,16 @@ export class TrackRenderer {
   }
 
   private async renderLine(lineData: any, width: number, name: string): Promise<void> {
-    if (!lineData) return;
+    if (!lineData || !lineData.normal) {
+      console.warn(`⚠️ ${name}: Missing line data or normal vector`);
+      return;
+    }
 
-    const { x, y, tangent: t } = lineData;
+    const { x, y, normal: n, tangent: t } = lineData;
     const thickness = 50;
 
+    // Create plane: width spans across the track (perpendicular), thickness along track direction
     const geometry = new THREE.PlaneGeometry(width, thickness);
-    geometry.rotateX(-Math.PI / 2);
 
     const textureLoader = new THREE.TextureLoader();
     const lineTexture = await textureLoader.loadAsync('/images/finish_line.png');
@@ -321,13 +333,18 @@ export class TrackRenderer {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(x, 4.3, y);
 
-    const targetX = x + t.x;
-    const targetZ = y + t.y;
-    mesh.lookAt(targetX, 4.3, targetZ);
+    // Rotate to lie flat on the ground (face up)
+    mesh.rotation.x = -Math.PI / 2;
+    
+    // Calculate the angle from the tangent vector to rotate around Y axis
+    // tangent.x and tangent.y define the direction along the track
+    // We want the plane's "length" (thickness dimension) to align with tangent
+    const angle = Math.atan2(t.x, t.y);
+    mesh.rotation.z = angle;
 
     mesh.name = name;
     this.trackGroup.add(mesh);
-    console.log(`🏁 ${name} rendered with texture at (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    console.log(`🏁 ${name} rendered with texture at (${x.toFixed(2)}, ${y.toFixed(2)}), angle: ${(angle * 180 / Math.PI).toFixed(1)}°`);
   }
 
   getBounds(): { min: THREE.Vector3; max: THREE.Vector3 } | null {

@@ -41,9 +41,14 @@ def build_track_from_telemetry(telemetry_data, grid_telemetry=None, track_width=
         tx /= t_norm
         ty /= t_norm
         
+        # Position at the center of the track (between inner and outer boundaries)
+        # instead of on the racing line which may be offset
+        center_x = float((x_inner[0] + x_outer[0]) / 2)
+        center_y = float((y_inner[0] + y_outer[0]) / 2)
+        
         finish_line = {
-            "x": float(plot_x_ref[0]),
-            "y": float(plot_y_ref[0]),
+            "x": center_x,
+            "y": center_y,
             "tangent": {"x": tx, "y": ty},
             "normal": {"x": -ty, "y": tx}
         }
@@ -54,7 +59,7 @@ def build_track_from_telemetry(telemetry_data, grid_telemetry=None, track_width=
             grid_x = float(grid_telemetry["X"].iloc[0])
             grid_y = float(grid_telemetry["Y"].iloc[0])
             
-            # Find closest point on track to get tangent
+            # Find closest point on track to get tangent and center position
             dists = np.sqrt((plot_x_ref - grid_x)**2 + (plot_y_ref - grid_y)**2)
             idx = np.argmin(dists)
             
@@ -66,9 +71,13 @@ def build_track_from_telemetry(telemetry_data, grid_telemetry=None, track_width=
             gtx /= gt_norm
             gty /= gt_norm
             
+            # Position at the center of the track (between inner and outer boundaries)
+            grid_center_x = float((x_inner[idx] + x_outer[idx]) / 2)
+            grid_center_y = float((y_inner[idx] + y_outer[idx]) / 2)
+            
             grid_line = {
-                "x": grid_x,
-                "y": grid_y,
+                "x": grid_center_x,
+                "y": grid_center_y,
                 "tangent": {"x": gtx, "y": gty},
                 "normal": {"x": -gty, "y": gtx}
             }

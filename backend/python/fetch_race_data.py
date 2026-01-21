@@ -43,29 +43,17 @@ def export_race_data(year, round_number, session_type='R'):
         except:
             pass
         
-        # Get track data from fastest lap (reference: main.py line 42-67)
+        # Get track data from fastest lap
+        # IMPORTANT: Use the SAME session for track data as for car positions to ensure
+        # consistent coordinates. Don't mix qualifying track with race car positions.
         print("Extracting track layout from fastest lap...")
         track_data = None
         try:
-            # Try qualifying session first (has DRS data)
-            try:
-                quali_session = load_session(year, round_number, 'Q')
-                fastest_quali = quali_session.laps.pick_fastest()
-                if fastest_quali is not None:
-                    quali_telemetry = fastest_quali.get_telemetry()
-                    if 'DRS' in quali_telemetry.columns:
-                        track_data = build_track_from_telemetry(quali_telemetry, grid_telemetry=grid_telemetry)
-                        print(f"✓ Track data from qualifying lap (driver {fastest_quali['Driver']})")
-            except:
-                pass
-            
-            # Fallback: use fastest race lap
-            if track_data is None:
-                fastest_lap = session.laps.pick_fastest()
-                if fastest_lap is not None:
-                    race_telemetry = fastest_lap.get_telemetry()
-                    track_data = build_track_from_telemetry(race_telemetry, grid_telemetry=grid_telemetry)
-                    print("✓ Track data from fastest race lap")
+            fastest_lap = session.laps.pick_fastest()
+            if fastest_lap is not None:
+                session_telemetry = fastest_lap.get_telemetry()
+                track_data = build_track_from_telemetry(session_telemetry, grid_telemetry=grid_telemetry)
+                print(f"✓ Track data from {session_type} session fastest lap (driver {fastest_lap['Driver']})")
         except Exception as e:
             print(f"Warning: Could not extract track data: {e}")
         

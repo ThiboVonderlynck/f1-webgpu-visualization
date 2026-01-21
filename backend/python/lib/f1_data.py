@@ -38,6 +38,8 @@ def _process_single_driver(args):
             return None
 
         driver_max_lap = laps_driver.LapNumber.max() if not laps_driver.empty else 0
+        driver_min_lap = laps_driver.LapNumber.min() if not laps_driver.empty else 0
+        print(f"  {driver_code}: Lap range {driver_min_lap} to {driver_max_lap}")
 
         t_all = []
         x_all = []
@@ -447,6 +449,19 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     
     # Create timeline
     timeline = np.arange(global_t_min, global_t_max, DT) - global_t_min
+    
+    # Debug: Check what lap number frame 0 corresponds to
+    frame_0_laps = {}
+    for code, data in driver_data.items():
+        t = data["t"] - global_t_min
+        lap = data["lap"]
+        # Find the lap number at t=0 (closest to global_t_min)
+        idx_at_t0 = np.argmin(np.abs(t))
+        frame_0_laps[code] = int(lap[idx_at_t0])
+    
+    print(f"\n🔍 DEBUG: Frame 0 lap numbers: {frame_0_laps}")
+    print(f"   Min lap at frame 0: {min(frame_0_laps.values())}")
+    print(f"   All drivers at lap 1+ at frame 0? {all(lap >= 1 for lap in frame_0_laps.values())}\n")
     
     # Resample weather data onto the timeline
     weather_resampled = None
