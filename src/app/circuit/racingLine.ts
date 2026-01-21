@@ -1,7 +1,6 @@
 /**
  * RacingLine - STUB for now
- * TODO: Replace with telemetry-based car animation (reference solution uses actual telemetry data)
- * Reference: main.py line 200+ (animates cars from telemetry frames)
+ * TODO: Replace with telemetry-based car animation
  */
 import * as THREE from 'three';
 

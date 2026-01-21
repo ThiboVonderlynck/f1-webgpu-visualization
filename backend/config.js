@@ -1,6 +1,5 @@
 /**
  * Configuration for F1 Visualization Backend
- * Following reference solution pattern for centralized config
  */
 export const CONFIG = {
   // Ports
@@ -10,7 +9,7 @@ export const CONFIG = {
     VITE_DEV: 5173,
   },
 
-  // Telemetry Settings (from reference solution)
+  // Telemetry Settings
   TELEMETRY: {
     FPS: 25, // Frames per second
     DT: 1 / 25, // Delta time

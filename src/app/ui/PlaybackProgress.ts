@@ -302,7 +302,7 @@ export class PlaybackProgress {
     
     // Draw Events
     const containerWidth = this.markersContainer.clientWidth || 1000;
-    const minWidthPercent = (4 / containerWidth) * 100; // Minimum 4px width like reference
+    const minWidthPercent = (4 / containerWidth) * 100; // Minimum 4px width
     
     this.events.forEach((event) => {
       const startProgress = (event.frame / this.totalFrames) * 100;
@@ -317,7 +317,7 @@ export class PlaybackProgress {
         const endFrame = event.endFrame || event.frame;
         const endProgress = (Math.min(endFrame, this.totalFrames) / this.totalFrames) * 100;
         
-        // Match reference: segment_width = max(4, end_x - start_x)
+        // Minimum segment width of 4px for visibility
         const width = Math.max(minWidthPercent, endProgress - startProgress);
         
         const segment = document.createElement('div');

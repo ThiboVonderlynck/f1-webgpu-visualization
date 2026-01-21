@@ -162,7 +162,7 @@ export class PlaybackUI {
   }
 
   private handleFrame(_frame: any): void {
-    // No-op: relying on pre-extracted events from metadata for stability (Reference project model)
+    // No-op: relying on pre-extracted events from metadata for stability
   }
 
   private handleMetadata(metadata: TelemetryMetadata): void {

@@ -26,7 +26,9 @@ def build_track_from_telemetry(telemetry_data, grid_telemetry=None, track_width=
         x_inner = plot_x_ref - nx * (track_width / 2)
         y_inner = plot_y_ref - ny * (track_width / 2)
         
+        # Extract DRS zones from telemetry
         drs_zones = extract_drs_zones(telemetry_data)
+        print(f"  DRS zones found: {len(drs_zones)}")
         
         x_min = float(min(plot_x_ref.min(), x_inner.min(), x_outer.min()))
         x_max = float(max(plot_x_ref.max(), x_inner.max(), x_outer.max()))

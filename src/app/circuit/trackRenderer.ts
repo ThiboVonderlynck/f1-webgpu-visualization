@@ -1,8 +1,6 @@
 /**
- * Track Renderer - Following reference solution approach
- * Reference: src/interfaces/race_replay.py build_track_from_example_lap()
- *
- * Renders track from telemetry data instead of STL files
+ * Track Renderer - Renders the circuit track surface, boundaries, and DRS zones
+ * Uses telemetry data instead of STL files
  */
 import * as THREE from 'three';
 
@@ -52,22 +50,14 @@ export class TrackRenderer {
   }
 
   async loadTrack(trackData: TrackData): Promise<void> {
-    console.log('🛤️ Starting track load...');
     this.clear();
-    
-    console.log('🛤️ Rendering track surface...');
     await this.renderTrackSurface(trackData);
-    
-    console.log('🛤️ Rendering boundaries...');
     await this.renderBoundaries(trackData.boundaries);
-    
-    console.log('🛤️ Rendering DRS zones...');
     this.renderDRSZones(trackData);
     
     // Always use finish_line (timing line from fastest lap) - grid_line is incorrectly calculated
     // from lap 1 telemetry which starts AT the timing line, not at the starting grid
     const primaryLine = trackData.finish_line;
-    console.log('🛤️ Rendering finish line...', { hasFinishLine: !!trackData.finish_line, primaryLine });
     await this.renderLine(primaryLine, trackData.track_width, 'start-finish-line');
     
     console.log(`✓ Track rendered: ${trackData.centerline.x.length} points, ${trackData.drs_zones?.length || 0} DRS zones`);

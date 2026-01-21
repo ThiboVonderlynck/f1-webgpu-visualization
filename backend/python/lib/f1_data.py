@@ -364,7 +364,7 @@ def get_qualifying_metadata(session, telemetry_start_offset_ms=0):
 
 def get_race_telemetry(session, session_type='R', use_cache=True):
     """
-    Get telemetry for all drivers (reference solution pattern)
+    Get telemetry for all drivers
     Returns data structure ready for JSON export
     """
     event_name = str(session).replace(' ', '_')

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Fetch F1 race telemetry data and export to MessagePack
-Following reference solution pattern with defensive programming
 """
 import sys
 import json
@@ -16,7 +15,7 @@ from lib.f1_data import (
 from lib.track import build_track_from_telemetry
 
 def export_race_data(year, round_number, session_type='R'):
-    """Fetch and export race data (reference solution pattern)"""
+    """Fetch and export race data"""
     try:
         print(f"\n{'='*60}")
         print(f"Fetching F1 Data: {year} Round {round_number} ({session_type})")
@@ -43,32 +42,49 @@ def export_race_data(year, round_number, session_type='R'):
         except:
             pass
         
-        # Get track data from fastest lap
-        # IMPORTANT: Use the SAME session for track data as for car positions to ensure
-        # consistent coordinates. Don't mix qualifying track with race car positions.
-        print("Extracting track layout from fastest lap...")
+        # Get track data - prefer qualifying lap for DRS zones (DRS always available there)
+        print("Extracting track layout...")
         track_data = None
+        example_lap = None
+        
+        # Try qualifying session first (DRS always available in qualifying)
         try:
+            if session_type != 'Q':
+                print("  Attempting to load qualifying session for track layout...")
+                quali_session = load_session(year, round_number, 'Q')
+                if quali_session is not None and len(quali_session.laps) > 0:
+                    fastest_quali = quali_session.laps.pick_fastest()
+                    if fastest_quali is not None:
+                        quali_telemetry = fastest_quali.get_telemetry()
+                        if 'DRS' in quali_telemetry.columns:
+                            example_lap = quali_telemetry
+                            print(f"  ✓ Using qualifying lap from driver {fastest_quali['Driver']} for DRS Zones")
+        except Exception as e:
+            print(f"  Could not load qualifying session: {e}")
+        
+        # Fallback: Use fastest race lap
+        if example_lap is None:
             fastest_lap = session.laps.pick_fastest()
             if fastest_lap is not None:
-                session_telemetry = fastest_lap.get_telemetry()
-                track_data = build_track_from_telemetry(session_telemetry, grid_telemetry=grid_telemetry)
-                print(f"✓ Track data from {session_type} session fastest lap (driver {fastest_lap['Driver']})")
-        except Exception as e:
-            print(f"Warning: Could not extract track data: {e}")
+                example_lap = fastest_lap.get_telemetry()
+                print("  Using fastest race lap (DRS detection may use speed-based fallback)")
+        
+        # Build track from example lap
+        if example_lap is not None:
+            track_data = build_track_from_telemetry(example_lap, grid_telemetry=grid_telemetry)
+        else:
+            print("Warning: No valid laps found for track layout")
         
         # Add track data to telemetry export
         if track_data:
             telemetry_data['track'] = track_data
         
-        # Prepare output directory (following reference solution pattern)
+        # Prepare output directory
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         output_dir = os.path.join(project_root, 'public', 'data', 'telemetry', str(year))
         os.makedirs(output_dir, exist_ok=True)
         
-        # Create output filename (reference: event name normalized)
-        # Reference uses: str(session).replace(' ', '_') 
-        # We'll use a simpler format: round-eventname_session.json
+        # Create output filename
         session_suffixes = {
             'Q': 'qualifying',
             'R': 'race',

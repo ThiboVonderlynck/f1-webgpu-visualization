@@ -510,8 +510,8 @@ wss.on('connection', (ws) => {
 });
 
 /**
- * Handle WebSocket commands
- * Reference: Playback controls pattern
+/**
+ * Playback controls
  */
 function handleCommand(command, value, ws) {
   if (!global.currentTelemetry) {
