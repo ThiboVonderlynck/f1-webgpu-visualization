@@ -240,6 +240,11 @@ export class DataFetcher {
           this.sessions = [];
           this.render();
           await this.loadSessions(this.selectedYear, this.selectedRound);
+          // Auto-select "Race" session as default (most common use case)
+          const raceSession = this.sessions.find(s => s.code === 'R');
+          if (raceSession) {
+            this.selectedSession = 'R';
+          }
           this.isLoadingSessions = false;
           this.render();
         } else if (type === 'session') {

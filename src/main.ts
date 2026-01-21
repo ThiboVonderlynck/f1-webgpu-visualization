@@ -16,9 +16,7 @@ import './styles/weather.css';
 import './styles/qualifying.css';
 
 async function initVisualization(trackData: TrackData) {
-  checkWebGPUSupport();
-
-  // Create loading overlay FIRST (before renderer) so it's visible during initialization
+  // Create loading overlay FIRST (before anything else) so it's visible immediately
   const loadingOverlay = document.createElement('div');
   loadingOverlay.id = 'model-loading-overlay';
   loadingOverlay.innerHTML = `
@@ -68,6 +66,9 @@ async function initVisualization(trackData: TrackData) {
   `;
   loadingOverlay.insertAdjacentHTML('beforeend', loadingContent);
   document.body.appendChild(loadingOverlay);
+
+  // Now check WebGPU support (after overlay is visible)
+  checkWebGPUSupport();
 
   // Helper to update loading text
   const updateLoadingText = (text: string) => {

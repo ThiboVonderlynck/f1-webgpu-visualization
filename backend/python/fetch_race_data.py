@@ -81,7 +81,13 @@ def export_race_data(year, round_number, session_type='R'):
         # Create output filename (reference: event name normalized)
         # Reference uses: str(session).replace(' ', '_') 
         # We'll use a simpler format: round-eventname_session.json
-        session_suffix = 'qualifying' if session_type == 'Q' else ('sprint' if session_type == 'S' else 'race')
+        session_suffixes = {
+            'Q': 'qualifying',
+            'R': 'race',
+            'S': 'sprint',
+            'SQ': 'sprint-qualifying'
+        }
+        session_suffix = session_suffixes.get(session_type, 'race')
         safe_event_name = event_name.lower().replace(' ', '-').replace("'", "")
         output_file = os.path.join(
             output_dir,

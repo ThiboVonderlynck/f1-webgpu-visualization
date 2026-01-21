@@ -6,7 +6,7 @@
   border-radius: 16px;
   border: 1px solid #2a2a2e;
   max-width: 1050px;
-  width: 95%;
+  width: calc(100% - 80px);
   position: fixed;
   top: 50%;
   left: 50%;
@@ -85,7 +85,7 @@
 
 .option-grid.races {
   grid-template-columns: repeat(4, 1fr);
-  max-height: 280px;
+  max-height: 180px;
   overflow-y: auto;
 }
 
