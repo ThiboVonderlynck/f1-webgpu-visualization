@@ -244,6 +244,34 @@ export class CarRenderer {
     return this.cars;
   }
 
+  /**
+   * Set visibility for a specific car (used to hide eliminated drivers in qualifying)
+   */
+  setCarVisible(code: string, visible: boolean): void {
+    const car = this.cars.get(code);
+    if (car) {
+      car.visible = visible;
+    }
+  }
+
+  /**
+   * Set visibility for multiple cars at once
+   */
+  setEliminatedDrivers(eliminatedCodes: Set<string>): void {
+    this.cars.forEach((car, code) => {
+      car.visible = !eliminatedCodes.has(code);
+    });
+  }
+
+  /**
+   * Show all cars (reset visibility)
+   */
+  showAllCars(): void {
+    this.cars.forEach((car) => {
+      car.visible = true;
+    });
+  }
+
   dispose(): void {
     this.clearCars();
   }

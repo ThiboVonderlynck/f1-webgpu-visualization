@@ -812,10 +812,22 @@ export class Leaderboard {
         leaderboardEl.appendChild(entryEl);
         this.entryElements.set(entry.code, entryEl);
         
-        // Add click handler for POV camera
+        // Add click handler for POV camera (only for active drivers)
+        const driverCode = entry.code; // Capture the driver code, not the entry object
         entryEl.addEventListener('click', () => {
+          // Check if driver is out (qualifying: eliminated, race: DNF)
+          const liveState = this.liveQualifyingState.get(driverCode);
+          const isEliminatedQualifying = liveState?.eliminated || false;
+          
+          // For race mode, check current entry state
+          const currentEntry = this.entries.find(e => e.code === driverCode);
+          const isOutRace = this.sessionMode === 'race' && currentEntry?.isOut === true;
+          
+          // Don't allow clicking on eliminated/out drivers
+          if (isEliminatedQualifying || isOutRace) return;
+          
           if (this.onDriverSelectCallback) {
-            this.onDriverSelectCallback(entry.code);
+            this.onDriverSelectCallback(driverCode);
           }
         });
         entryEl.style.cursor = 'pointer';
@@ -838,10 +850,13 @@ export class Leaderboard {
       const isInDangerZone = this.sessionMode === 'qualifying' && eliminationZone.includes(displayPosition) && liveStateForClass?.eliminated !== true;
       const isEliminated = this.sessionMode === 'qualifying' && liveStateForClass?.eliminated === true;
       
-      
-      // In race mode, 'out' means DNF. In qualifying, we don't use 'out' (we use 'eliminated' instead)
+      // In race mode, 'out' means DNF (based on rel_dist === 1)
       const showOut = this.sessionMode === 'race' && entry.isOut;
       entryEl.className = `leaderboard-entry ${showOut ? 'out' : ''} ${isSelected ? 'selected' : ''} ${isLeader ? 'leader' : ''} ${isInDangerZone ? 'danger-zone' : ''} ${isEliminated ? 'eliminated' : ''}`;
+      
+      // Update cursor style based on eliminated/out status (not clickable if out)
+      const isNotClickable = isEliminated || showOut;
+      entryEl.style.cursor = isNotClickable ? 'default' : 'pointer';
       
       entryEl.style.setProperty('--driver-rgb', `${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]}`);
       
@@ -885,6 +900,7 @@ export class Leaderboard {
             </div>
           </div>
           <div class="driver-right">
+            ${entry.isOut ? `<span class="eliminated-label">OUT</span>` : ''}
             <span class="pit-label" 
                   data-state="${entry.pitState}"
                   style="color: rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})">
@@ -957,18 +973,22 @@ export class Leaderboard {
           // Update state tracking
           pitLabel.dataset.state = currentState;
           
-          // Handle OUT status - show in pit-label area
-          if (entry.isOut) {
-            if (pitLabel.textContent !== 'OUT') {
-              pitLabel.textContent = 'OUT';
-              pitLabel.style.color = 'rgba(255, 255, 255, 0.7)';  // White 70%
-              pitLabel.classList.add('visible');
-            }
-          } else if (pitLabel.textContent === 'OUT') {
-            // Clear OUT status if driver is back (shouldn't happen often)
-            pitLabel.classList.remove('visible');
-            pitLabel.textContent = '';
+        }
+        
+        // Handle OUT label (similar to qualifying eliminated label)
+        let outLabel = entryEl.querySelector('.eliminated-label');
+        if (entry.isOut && !outLabel) {
+          // Add OUT label if not present
+          const rightDiv = entryEl.querySelector('.driver-right');
+          if (rightDiv) {
+            const label = document.createElement('span');
+            label.className = 'eliminated-label';
+            label.textContent = 'OUT';
+            rightDiv.insertBefore(label, rightDiv.firstChild);
           }
+        } else if (!entry.isOut && outLabel) {
+          // Remove OUT label if present but driver not out
+          outLabel.remove();
         }
       }
       
@@ -1111,5 +1131,37 @@ export class Leaderboard {
    */
   onDriverSelect(callback: (code: string) => void): void {
     this.onDriverSelectCallback = callback;
+  }
+
+  /**
+   * Get the set of all eliminated drivers (Q1 + Q2)
+   * Used to hide car models in qualifying
+   */
+  getEliminatedDrivers(): Set<string> {
+    const eliminated = new Set<string>();
+    this.q1EliminatedDrivers.forEach(code => eliminated.add(code));
+    this.q2EliminatedDrivers.forEach(code => eliminated.add(code));
+    return eliminated;
+  }
+
+  /**
+   * Get the set of all "out" drivers (DNF in race, eliminated in qualifying)
+   * Used to hide car models on the circuit
+   */
+  getOutDrivers(): Set<string> {
+    const outDrivers = new Set<string>();
+    
+    // Add eliminated drivers from qualifying
+    this.q1EliminatedDrivers.forEach(code => outDrivers.add(code));
+    this.q2EliminatedDrivers.forEach(code => outDrivers.add(code));
+    
+    // Add DNF drivers from race
+    this.entries.forEach(entry => {
+      if (entry.isOut) {
+        outDrivers.add(entry.code);
+      }
+    });
+    
+    return outDrivers;
   }
 }

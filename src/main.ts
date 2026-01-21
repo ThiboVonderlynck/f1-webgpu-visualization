@@ -177,6 +177,14 @@ async function initVisualization(trackData: TrackData) {
     leaderboard.updateFromFrame(frame);
     weatherWidget.updateFromFrame(frame);
     
+    // Hide out drivers' cars (DNF in race, eliminated in qualifying)
+    const outDrivers = leaderboard.getOutDrivers();
+    if (outDrivers.size > 0) {
+      carRenderer.setEliminatedDrivers(outDrivers);
+    } else {
+      carRenderer.showAllCars();
+    }
+    
     if (povCamera.getIsActive()) {
       povOverlay.update(frame);
     }
