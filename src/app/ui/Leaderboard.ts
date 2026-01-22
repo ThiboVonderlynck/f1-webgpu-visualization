@@ -145,6 +145,7 @@ export class Leaderboard {
 
   /**
    * Update the qualifying countdown timer
+   * Uses running_intervals to correctly account for red flags where the clock stops
    */
   private updateQualiTimer(sessionTimeMs: number): void {
     const timerEl = this.container.querySelector('.quali-timer');
@@ -157,17 +158,38 @@ export class Leaderboard {
       return;
     }
 
-    // Calculate remaining time in the current phase
+    // Calculate remaining time using running_intervals (accounts for red flags)
     let remainingMs: number;
+    let isClockRunning = false;
     
     if (sessionTimeMs < currentPhaseData.start_ms) {
       // Before phase starts - show full duration
-      remainingMs = currentPhaseData.end_ms - currentPhaseData.start_ms;
+      remainingMs = currentPhaseData.total_duration_ms;
     } else if (sessionTimeMs >= currentPhaseData.end_ms) {
       // Phase ended
       remainingMs = 0;
+    } else if (currentPhaseData.running_intervals && currentPhaseData.running_intervals.length > 0) {
+      // During phase - calculate elapsed time from running intervals only
+      let elapsedMs = 0;
+      
+      for (const interval of currentPhaseData.running_intervals) {
+        if (sessionTimeMs >= interval.end_ms) {
+          // This interval has fully passed
+          elapsedMs += interval.end_ms - interval.start_ms;
+        } else if (sessionTimeMs >= interval.start_ms) {
+          // We're currently in this interval (clock is running)
+          elapsedMs += sessionTimeMs - interval.start_ms;
+          isClockRunning = true;
+          break;
+        } else {
+          // Haven't reached this interval yet
+          break;
+        }
+      }
+      
+      remainingMs = Math.max(0, currentPhaseData.total_duration_ms - elapsedMs);
     } else {
-      // During phase - calculate remaining
+      // Fallback: simple calculation (for old data without running_intervals)
       remainingMs = currentPhaseData.end_ms - sessionTimeMs;
     }
 
@@ -177,10 +199,13 @@ export class Leaderboard {
     const seconds = totalSeconds % 60;
     timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     
-    // Add styling classes based on time remaining
-    timerEl.classList.remove('warning', 'ended');
+    // Add styling classes based on time remaining and clock state
+    timerEl.classList.remove('warning', 'ended', 'paused');
     if (totalSeconds === 0) {
       timerEl.classList.add('ended');
+    } else if (!isClockRunning && sessionTimeMs >= currentPhaseData.start_ms && sessionTimeMs < currentPhaseData.end_ms) {
+      // Clock is paused (red flag period between intervals)
+      timerEl.classList.add('paused');
     } else if (totalSeconds <= 60) {
       timerEl.classList.add('warning');
     }

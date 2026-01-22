@@ -1,9 +1,12 @@
 /**
  * QualifyingSessionTimer - Displays the current qualifying phase and countdown
  * Shows Q1/Q2/Q3 indicator with session countdown timer
+ * 
+ * Handles red-flagged sessions correctly by using running_intervals to calculate
+ * elapsed time only when the clock is actually running.
  */
 
-import type { QualifyingMetadata } from '../playback/websocketClient';
+import type { QualifyingMetadata, QualifyingSessionPhase } from '../playback/websocketClient';
 
 export class QualifyingSessionTimer {
   private container: HTMLElement;
@@ -11,6 +14,9 @@ export class QualifyingSessionTimer {
   private timeRemaining: number = 0; // seconds
   private sessionStatus: 'active' | 'paused' | 'ended' = 'active';
   private timerInterval: ReturnType<typeof setInterval> | null = null;
+  
+  // Phase data for calculating elapsed time from running intervals
+  private currentPhaseData: QualifyingSessionPhase | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -18,24 +24,77 @@ export class QualifyingSessionTimer {
   }
 
   /**
-   * Set the current qualifying phase
+   * Set the current qualifying phase with full phase data
    */
-  setPhase(phase: 'Q1' | 'Q2' | 'Q3'): void {
+  setPhase(phase: 'Q1' | 'Q2' | 'Q3', phaseData?: QualifyingSessionPhase): void {
     this.currentPhase = phase;
+    this.currentPhaseData = phaseData || null;
     
-    // Set initial time based on phase
-    const phaseDurations: Record<string, number> = {
-      'Q1': 18 * 60,
-      'Q2': 15 * 60,
-      'Q3': 12 * 60,
-    };
-    this.timeRemaining = phaseDurations[phase] || 18 * 60;
+    // Set initial time based on phase data or defaults
+    if (phaseData?.total_duration_ms) {
+      this.timeRemaining = Math.round(phaseData.total_duration_ms / 1000);
+    } else {
+      // Fallback defaults (Q=18/15/12, SQ=12/10/8)
+      const phaseDurations: Record<string, number> = {
+        'Q1': 18 * 60,
+        'Q2': 15 * 60,
+        'Q3': 12 * 60,
+      };
+      this.timeRemaining = phaseDurations[phase] || 18 * 60;
+    }
     
     this.updateDOM();
   }
 
   /**
-   * Set the time remaining in seconds
+   * Update the timer based on current frame time (in milliseconds)
+   * Calculates elapsed time only during running intervals (accounts for red flags)
+   */
+  updateFromFrameTime(frameTimeMs: number): void {
+    if (!this.currentPhaseData?.running_intervals) {
+      return;
+    }
+    
+    const intervals = this.currentPhaseData.running_intervals;
+    const totalDurationMs = this.currentPhaseData.total_duration_ms;
+    
+    // Calculate elapsed time based on which intervals have passed
+    let elapsedMs = 0;
+    let isClockRunning = false;
+    
+    for (const interval of intervals) {
+      if (frameTimeMs >= interval.end_ms) {
+        // This interval has fully passed
+        elapsedMs += interval.end_ms - interval.start_ms;
+      } else if (frameTimeMs >= interval.start_ms) {
+        // We're currently in this interval
+        elapsedMs += frameTimeMs - interval.start_ms;
+        isClockRunning = true;
+        break;
+      } else {
+        // Haven't reached this interval yet
+        break;
+      }
+    }
+    
+    // Calculate remaining time
+    const remainingMs = Math.max(0, totalDurationMs - elapsedMs);
+    this.timeRemaining = Math.round(remainingMs / 1000);
+    
+    // Update status based on whether clock is running
+    if (remainingMs <= 0) {
+      this.sessionStatus = 'ended';
+    } else if (isClockRunning) {
+      this.sessionStatus = 'active';
+    } else {
+      this.sessionStatus = 'paused'; // Between intervals (red flag)
+    }
+    
+    this.updateDOM();
+  }
+
+  /**
+   * Set the time remaining in seconds (legacy method)
    */
   setTimeRemaining(seconds: number): void {
     this.timeRemaining = Math.max(0, seconds);

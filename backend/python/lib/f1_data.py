@@ -279,19 +279,67 @@ def get_qualifying_metadata(session, telemetry_start_offset_ms=0):
         
         # Extract Q1/Q2/Q3 phase timing from session status
         # Session status has 'Started' and 'Finished' for each phase
+        # Note: Red flags cause 'Aborted' followed by 'Started' again, so there may be
+        # multiple 'Started' events per phase. The clock accumulates across restarts.
+        # 
+        # We need to capture all "running" intervals (Started → Aborted/Finished) for each phase
+        # so the frontend can calculate elapsed/remaining time correctly.
         phase_timing = []
-        started_times = session_status[session_status['Status'] == 'Started']['Time'].tolist()
-        finished_times = session_status[session_status['Status'] == 'Finished']['Time'].tolist()
+        
+        # Get all status events sorted by time
+        status_events = session_status.sort_values('Time').to_dict('records')
+        
+        # Find all Finished events to identify phase boundaries
+        finished_indices = [i for i, e in enumerate(status_events) if e['Status'] == 'Finished']
         
         phase_names = ['Q1', 'Q2', 'Q3']
-        for i, name in enumerate(phase_names):
-            if i < len(started_times) and i < len(finished_times):
+        prev_finished_idx = -1
+        
+        for phase_idx, finished_idx in enumerate(finished_indices):
+            if phase_idx >= len(phase_names):
+                break
+            
+            name = phase_names[phase_idx]
+            
+            # Get events between previous Finished (exclusive) and this Finished (inclusive)
+            phase_events = status_events[prev_finished_idx + 1 : finished_idx + 1]
+            
+            # Build list of running intervals (Started → Aborted or Started → Finished)
+            running_intervals = []
+            current_start = None
+            
+            for event in phase_events:
+                status = event['Status']
+                time = event['Time']
+                
+                if status == 'Started':
+                    current_start = time
+                elif status in ('Aborted', 'Finished') and current_start is not None:
+                    running_intervals.append({
+                        "start_ms": time_to_ms(current_start),
+                        "end_ms": time_to_ms(time)
+                    })
+                    current_start = None
+            
+            # Calculate total duration and overall start/end times
+            if running_intervals:
+                total_duration_ms = sum(
+                    interval["end_ms"] - interval["start_ms"] 
+                    for interval in running_intervals
+                )
+                overall_start_ms = running_intervals[0]["start_ms"]
+                overall_end_ms = running_intervals[-1]["end_ms"]
+                
                 phase_timing.append({
                     "name": name,
-                    "start_ms": time_to_ms(started_times[i]),
-                    "end_ms": time_to_ms(finished_times[i]),
+                    "start_ms": overall_start_ms,  # When the phase first started
+                    "end_ms": overall_end_ms,      # When the phase finally finished
+                    "total_duration_ms": total_duration_ms,  # Accumulated clock time
+                    "running_intervals": running_intervals,  # All Started→Aborted/Finished periods
                     "elimination_positions": [16, 17, 18, 19, 20] if name == 'Q1' else ([11, 12, 13, 14, 15] if name == 'Q2' else [])
                 })
+            
+            prev_finished_idx = finished_idx
         
         # Build results with Q1/Q2/Q3 times
         quali_results = []

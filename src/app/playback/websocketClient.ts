@@ -58,10 +58,17 @@ export interface QualifyingLapEvent {
   compound: string;
 }
 
+export interface RunningInterval {
+  start_ms: number;  // Session time when clock started
+  end_ms: number;    // Session time when clock stopped (Aborted or Finished)
+}
+
 export interface QualifyingSessionPhase {
   name: 'Q1' | 'Q2' | 'Q3';
-  start_ms: number;  // Session time when phase started
-  end_ms: number;    // Session time when phase ended
+  start_ms: number;           // Session time when phase first started
+  end_ms: number;             // Session time when phase finally finished
+  total_duration_ms: number;  // Accumulated clock time (accounts for red flags)
+  running_intervals: RunningInterval[];  // All Started→Aborted/Finished periods
   elimination_positions: number[];
 }
 

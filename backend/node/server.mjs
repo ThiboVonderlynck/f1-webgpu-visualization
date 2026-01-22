@@ -170,7 +170,9 @@ app.get('/api/check/:year/:round/:sessionType', async (req, res) => {
     }
 
     const files = readdirSync(telemetryDir);
-    const sessionSuffix = sessionType === 'Q' ? 'qualifying' : sessionType === 'S' ? 'sprint' : 'race';
+    const sessionSuffix = sessionType === 'Q' ? 'qualifying' : 
+                         sessionType === 'SQ' ? 'sprint-qualifying' :
+                         sessionType === 'S' ? 'sprint' : 'race';
     const roundPrefix = String(round).padStart(2, '0');
 
     // Find file matching pattern: 01-*_race.msgpack or 01-*_race.json
@@ -213,10 +215,13 @@ app.get('/api/cached/:year', async (req, res) => {
       
       files.forEach(file => {
         // Match both .msgpack and .json files
-        const match = file.match(/^(\d+)-.*_(race|qualifying|sprint)\.(msgpack|json)$/);
+        const match = file.match(/^(\d+)-.*_(race|qualifying|sprint-qualifying|sprint)\.(msgpack|json)$/);
         if (match) {
           const round = parseInt(match[1], 10);
-          const session = match[2] === 'race' ? 'R' : match[2] === 'qualifying' ? 'Q' : 'S';
+          const session = match[2] === 'race' ? 'R' : 
+                         match[2] === 'qualifying' ? 'Q' : 
+                         match[2] === 'sprint-qualifying' ? 'SQ' :
+                         'S';
           
           if (!cached[round]) cached[round] = [];
           if (!cached[round].includes(session)) {
@@ -308,7 +313,9 @@ app.post('/api/load', async (req, res) => {
     }
 
     const files = readdirSync(telemetryDir);
-    const sessionSuffix = sessionType === 'Q' ? 'qualifying' : sessionType === 'S' ? 'sprint' : 'race';
+    const sessionSuffix = sessionType === 'Q' ? 'qualifying' : 
+                         sessionType === 'SQ' ? 'sprint-qualifying' :
+                         sessionType === 'S' ? 'sprint' : 'race';
     const roundPrefix = String(round).padStart(2, '0');
 
     // Look for MessagePack file first, fallback to JSON for backwards compatibility
