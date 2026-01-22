@@ -28,6 +28,7 @@ export class DataFetcher {
   private selectedYear: number = 2024;
   private selectedRound: number = 0;
   private selectedSession: string = '';
+  private bearerToken: string = '';
   private isLoadingRaces: boolean = false;
   private isLoadingSessions: boolean = false;
   private onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void;
@@ -190,8 +191,17 @@ export class DataFetcher {
           </div>
         </div>
 
-        <div class="load-button-container">
-          <button class="load-button" id="fetch-button">LOAD DATA & START</button>
+        <div class="section token-section">
+          <div class="section-title">Authentication <span class="required-badge">REQUIRED</span></div>
+          <div class="token-input-container">
+            <input 
+              type="password" 
+              id="bearer-token-input" 
+              class="token-input" 
+              placeholder="Enter Bearer Token"
+              value="${this.bearerToken}"
+            />
+          </div>
         </div>
 
         <div class="terminal-container" id="terminal-container">
@@ -207,6 +217,10 @@ export class DataFetcher {
         </div>
 
         <div id="message-container"></div>
+
+        <div class="load-button-container">
+          <button class="load-button" id="fetch-button">LOAD DATA & START</button>
+        </div>
       </div>
     `;
 
@@ -216,6 +230,25 @@ export class DataFetcher {
   private attachEventListeners() {
     const button = this.container.querySelector('#fetch-button') as HTMLButtonElement;
     button?.addEventListener('click', () => this.handleFetch());
+
+    // Bearer token input listener
+    const tokenInput = this.container.querySelector('#bearer-token-input') as HTMLInputElement;
+    tokenInput?.addEventListener('input', (e) => {
+      this.bearerToken = (e.target as HTMLInputElement).value;
+      // Store in localStorage for persistence
+      if (this.bearerToken) {
+        localStorage.setItem('f1_bearer_token', this.bearerToken);
+      } else {
+        localStorage.removeItem('f1_bearer_token');
+      }
+    });
+    
+    // Load token from localStorage on init
+    const savedToken = localStorage.getItem('f1_bearer_token');
+    if (savedToken && tokenInput) {
+      this.bearerToken = savedToken;
+      tokenInput.value = savedToken;
+    }
 
     this.container.querySelectorAll('.option-card').forEach(card => {
       card.addEventListener('click', async (e) => {
@@ -260,12 +293,24 @@ export class DataFetcher {
 
   private addTerminalLog(message: string, type: 'info' | 'success' | 'error' = 'info') {
     const terminalOutput = this.container.querySelector('#terminal-output') as HTMLElement;
+    if (!terminalOutput) return;
+    
     const logLine = document.createElement('div');
     logLine.className = `terminal-line terminal-${type}`;
     logLine.textContent = message;
     terminalOutput.appendChild(logLine);
-    // Auto-scroll to bottom
+    
+    // Auto-scroll to bottom - multiple approaches for reliability
+    // 1. Scroll the terminal output itself
     terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    
+    // 2. Also use scrollIntoView on the new line
+    logLine.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    
+    // 3. Double-check after animation frame
+    requestAnimationFrame(() => {
+      terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    });
   }
 
   private clearTerminal() {
@@ -306,6 +351,14 @@ export class DataFetcher {
 
     if (!round || !sessionType) {
       messageContainer.innerHTML = '<div class="message error">Please select a Grand Prix and Session first</div>';
+      messageContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    
+    // Validate Bearer token is provided
+    if (!this.bearerToken || this.bearerToken.trim() === '') {
+      messageContainer.innerHTML = '<div class="message error">Please enter a Bearer token for authentication</div>';
+      messageContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
 
@@ -319,6 +372,11 @@ export class DataFetcher {
     
     // Setup WebSocket listener for Python logs
     this.setupWebSocketLogListener();
+    
+    // Scroll to terminal after it's visible
+    setTimeout(() => {
+      terminalContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
 
     try {
       this.addTerminalLog('Checking data...', 'info');
@@ -329,9 +387,13 @@ export class DataFetcher {
 
       if (needsFetch) {
         this.addTerminalLog('Fetching from FastF1...', 'info');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (this.bearerToken) {
+          headers['Authorization'] = `Bearer ${this.bearerToken}`;
+        }
         const fetchResponse = await fetch(`${API_URL}/fetch`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ year, round, sessionType }),
         });
 
@@ -345,9 +407,13 @@ export class DataFetcher {
       }
 
       this.addTerminalLog('Loading telemetry...', 'info');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.bearerToken) {
+        headers['Authorization'] = `Bearer ${this.bearerToken}`;
+      }
       const loadResponse = await fetch(`${API_URL}/load`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ year, round, sessionType }),
       });
 
@@ -379,6 +445,9 @@ export class DataFetcher {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.addTerminalLog(`✗ Error: ${errorMessage}`, 'error');
       messageContainer.innerHTML = `<div class="message error">✗ ${errorMessage}</div>`;
+      
+      // Scroll to error message
+      messageContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       
       // Only re-enable button on error
       button.disabled = false;

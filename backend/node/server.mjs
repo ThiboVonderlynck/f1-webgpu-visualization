@@ -239,6 +239,10 @@ app.get('/api/cached/:year', async (req, res) => {
 
 app.post('/api/fetch', async (req, res) => {
   const { year, round, sessionType = 'R' } = req.body;
+  
+  // Extract Bearer token from Authorization header
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
   if (!year || !round) {
     return res.status(400).json({
@@ -246,6 +250,17 @@ app.post('/api/fetch', async (req, res) => {
       error: 'Year and round are required',
     });
   }
+  
+  // Validate Bearer token (demo/showcase mode)
+  // For live timing, require "MCT" token
+  if (!bearerToken || bearerToken !== 'MCT') {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Valid Bearer token required for live timing access',
+    });
+  }
+  
+  console.log('✓ Bearer token validated successfully');
 
   try {
     console.log(`\nFetching F1 data: ${year} Round ${round} (${sessionType})`);
@@ -253,7 +268,8 @@ app.post('/api/fetch', async (req, res) => {
     const pythonScript = path.join(__dirname, '../python/fetch_race_data.py');
     
     // Use spawn for real-time output streaming
-    const pythonProcess = spawn(PYTHON_CMD, [pythonScript, year.toString(), round.toString(), sessionType]);
+    // -u flag makes Python unbuffered for real-time output
+    const pythonProcess = spawn(PYTHON_CMD, ['-u', pythonScript, year.toString(), round.toString(), sessionType]);
     
     let stdoutData = '';
     let stderrData = '';
@@ -339,6 +355,10 @@ app.post('/api/fetch', async (req, res) => {
 
 app.post('/api/load', async (req, res) => {
   const { year, round, sessionType = 'R' } = req.body;
+  
+  // Extract Bearer token from Authorization header
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
   if (!year || !round) {
     return res.status(400).json({
@@ -346,6 +366,17 @@ app.post('/api/load', async (req, res) => {
       error: 'Year and round are required',
     });
   }
+  
+  // Validate Bearer token (demo/showcase mode)
+  // For live timing, require "MCT" token
+  if (!bearerToken || bearerToken !== 'MCT') {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Valid Bearer token required to load data',
+    });
+  }
+  
+  console.log('✓ Bearer token validated successfully');
 
   try {
     // Find the telemetry file by scanning directory

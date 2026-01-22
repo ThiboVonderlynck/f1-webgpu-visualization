@@ -29,12 +29,9 @@ def _process_single_driver(args):
     """Process telemetry data for a single driver (must be top-level for multiprocessing)"""
     driver_no, session, driver_code = args
     
-    print(f"Getting telemetry for driver: {driver_code}")
-    
     try:
         laps_driver = session.laps.pick_drivers(driver_no)
         if laps_driver.empty:
-            print(f"No laps found for driver {driver_code}")
             return None
 
         driver_max_lap = laps_driver.LapNumber.max() if not laps_driver.empty else 0
@@ -97,7 +94,6 @@ def _process_single_driver(args):
                 continue
 
         if not t_all:
-            print(f"No valid telemetry for {driver_code}")
             return None
 
         # Concatenate and sort
@@ -112,8 +108,6 @@ def _process_single_driver(args):
         t_all, x_all, y_all, dist_all, rel_dist_all, lap_numbers, \
         tyre_compounds, speed_all, gear_all, drs_all, throttle_all, brake_all, rpm_all = [arr[order] for arr in all_data]
 
-        print(f"Completed telemetry for driver: {driver_code}")
-        
         return {
             "code": driver_code,
             "data": {
@@ -137,7 +131,7 @@ def _process_single_driver(args):
         }
         
     except Exception as e:
-        print(f"Failed to process driver {driver_code}: {e}")
+        # Silently return None on error (error handling in main process)
         return None
 
 def load_session(year, round_number, session_type='R'):
@@ -452,16 +446,24 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     num_processes = min(cpu_count(), len(drivers))  # Use all available CPUs
     
     print(f"Using {num_processes} parallel workers...")
+    
+    # Print driver list before processing
+    for driver_no, _, driver_code in driver_args:
+        print(f"  → Driver queued: {driver_code}")
+    
     with Pool(processes=num_processes) as pool:
         results = pool.map(_process_single_driver, driver_args)
     
-    # Process results
-    for result in results:
+    # Process results and print completion
+    print(f"\nProcessing results from {len(results)} drivers...")
+    for i, result in enumerate(results):
         if result is None:
             continue
         
         code = result["code"]
         driver_data[code] = result["data"]
+        
+        print(f"  ✓ Processed driver {i+1}/{len(results)}: {code}")
         
         t_min = result["t_min"]
         t_max = result["t_max"]
@@ -607,7 +609,9 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
         }
     
     # Build frames with position calculation
+    print(f"\nBuilding {len(timeline)} telemetry frames...")
     frames = []
+    progress_step = max(1, len(timeline) // 10)  # Print progress every 10%
     for i in range(len(timeline)):
         t = timeline[i]
         
@@ -679,6 +683,11 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
             frame_payload["track_status"] = current_status
         
         frames.append(frame_payload)
+        
+        # Print progress every 10%
+        if i > 0 and i % progress_step == 0:
+            progress_pct = int((i / len(timeline)) * 100)
+            print(f"  → Building frames: {progress_pct}% ({i}/{len(timeline)})")
     
     print(f"Completed telemetry extraction: {len(frames)} frames")
     
