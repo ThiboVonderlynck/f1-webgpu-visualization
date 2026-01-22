@@ -303,7 +303,7 @@ export class TrackRenderer {
       return;
     }
 
-    const { x, y, normal: n, tangent: t } = lineData;
+    const { x, y } = lineData;
     const thickness = 50;
 
     // Create plane: width spans across the track (perpendicular), thickness along track direction
