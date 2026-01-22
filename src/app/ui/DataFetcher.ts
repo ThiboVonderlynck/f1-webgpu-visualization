@@ -134,15 +134,7 @@ export class DataFetcher {
     this.container.innerHTML = `
       <div class="data-fetcher">
         <div class="data-fetcher-header">
-          <div class="logo-container">
-            <div class="logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 8v8m-4-4h8"/>
-              </svg>
-            </div>
-            <h1>F1 TELEMETRY FETCHER</h1>
-          </div>
+          <h1>F1 TELEMETRY FETCHER</h1>
           <div class="divider"></div>
         </div>
 
