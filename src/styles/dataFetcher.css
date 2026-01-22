@@ -18,7 +18,7 @@
 }
 
 .data-fetcher::-webkit-scrollbar {
-  width: 10px;
+  width: 6px;
 }
 
 .data-fetcher::-webkit-scrollbar-track {
