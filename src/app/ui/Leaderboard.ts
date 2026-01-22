@@ -44,6 +44,12 @@ export class Leaderboard {
   private driverPitState: Map<string, PitState> = new Map();
   private driverHadPitStop: Map<string, boolean> = new Map(); // Tracks if driver stopped (speed ~0)
   
+  // DNF detection: track frozen rel_dist values
+  private driverLastRelDist: Map<string, number> = new Map();
+  private driverFrozenFrames: Map<string, number> = new Map();
+  private static readonly DNF_REL_DIST_THRESHOLD = 0.999; // rel_dist >= this is suspicious
+  private static readonly DNF_FROZEN_FRAMES_THRESHOLD = 50; // ~2 seconds at 25fps
+  
   // POV camera callback
   private onDriverSelectCallback?: (code: string) => void;
 
@@ -532,6 +538,52 @@ export class Leaderboard {
   private static readonly PIT_EXIT_SPEED_THRESHOLD = 90; // km/h (accelerating out of pit)
 
   /**
+   * Detect if a driver is OUT (DNF) based on rel_dist behavior
+   * 
+   * A driver is considered OUT if:
+   * 1. rel_dist is NaN or null (telemetry stopped completely)
+   *    Note: NaN becomes null when serialized via JSON.stringify() over WebSocket
+   * 2. rel_dist is very high (>= 0.999) AND has been frozen for several frames
+   *    (distinguishes from legitimate finish line crossings where rel_dist resets to 0)
+   */
+  private isDriverOut(code: string, relDist: number): boolean {
+    // Case 1: NaN or null means telemetry stopped - definitely OUT
+    // Note: JSON.stringify() converts NaN to null, so we check for both
+    if (relDist === null || relDist === undefined || Number.isNaN(relDist)) {
+      return true;
+    }
+    
+    const lastRelDist = this.driverLastRelDist.get(code);
+    const frozenFrames = this.driverFrozenFrames.get(code) || 0;
+    
+    // Check if rel_dist is in the "suspicious" high range
+    if (relDist >= Leaderboard.DNF_REL_DIST_THRESHOLD) {
+      // Check if value is frozen (hasn't changed significantly)
+      if (lastRelDist !== undefined && Math.abs(relDist - lastRelDist) < 0.0001) {
+        // Value is frozen - increment counter
+        const newFrozenFrames = frozenFrames + 1;
+        this.driverFrozenFrames.set(code, newFrozenFrames);
+        
+        // If frozen for enough frames, driver is OUT
+        if (newFrozenFrames >= Leaderboard.DNF_FROZEN_FRAMES_THRESHOLD) {
+          return true;
+        }
+      } else {
+        // Value changed - reset frozen counter
+        this.driverFrozenFrames.set(code, 0);
+      }
+    } else {
+      // rel_dist is in normal range - reset frozen counter
+      this.driverFrozenFrames.set(code, 0);
+    }
+    
+    // Update last known rel_dist
+    this.driverLastRelDist.set(code, relDist);
+    
+    return false;
+  }
+
+  /**
    * State machine for pit lane detection:
    * NONE → IN_PIT: Car enters pit lane (far from centerline, pit lane speed)
    * IN_PIT → tracks when speed drops to ~0 (pit stop happening)
@@ -604,6 +656,14 @@ export class Leaderboard {
   resetEntries(): void {
     // Clear the entry elements map - they'll be recreated on next updateDOM
     this.entryElements.clear();
+    
+    // Clear DNF detection state
+    this.driverLastRelDist.clear();
+    this.driverFrozenFrames.clear();
+    
+    // Clear pit state tracking
+    this.driverPitState.clear();
+    this.driverHadPitStop.clear();
     
     // Clear the entries container
     const entriesContainer = this.container.querySelector('.leaderboard-entries');
@@ -708,6 +768,9 @@ export class Leaderboard {
       // Get qualifying data if available
       const qualiResult = this.qualifyingResultsMap.get(code);
       
+      // Detect if driver is OUT using robust NaN and frozen value detection
+      const isOut = this.isDriverOut(code, pos.rel_dist);
+      
       entries.push({
         code,
         color,
@@ -717,7 +780,7 @@ export class Leaderboard {
         tyre: pos.tyre,
         drs: pos.drs,
         speed: speed,
-        isOut: pos.rel_dist === 1,
+        isOut,
         pitState: pitState,
         // Add qualifying fields if available
         q1Time: qualiResult?.q1_time,
@@ -872,6 +935,7 @@ export class Leaderboard {
         // Show full lap time format (e.g., "1:23.456")
         const bestTime = liveState?.bestTimeStr || '-';
         
+        // If eliminated, only show driver name and "Out" label (no tyre indicator)
         expectedHTML = `
           <div class="driver-left">
             <div class="position">${displayPosition}</div>
@@ -880,16 +944,18 @@ export class Leaderboard {
             <div class="driver-code">${entry.code}</div>
           </div>
           <div class="driver-right quali-times">
-            ${isEliminated ? `<span class="eliminated-label">OUT</span>` : ''}
-            <span class="quali-time best-time">${bestTime}</span>
-            <img src="${tyreImagePath}" 
-                 alt="${tyreName}"
-                 class="tyre-indicator"
-                 title="${tyreName}" />
+            ${isEliminated ? `<span class="eliminated-label">Out</span>` : `
+              <span class="quali-time best-time">${bestTime}</span>
+              <img src="${tyreImagePath}" 
+                   alt="${tyreName}"
+                   class="tyre-indicator"
+                   title="${tyreName}" />
+            `}
           </div>
         `;
       } else {
         // Race mode - original layout
+        // If driver is Out, only show driver name and "Out" label (no tyre/DRS indicators)
         expectedHTML = `
           <div class="driver-left">
             <div class="position">${displayPosition}</div>
@@ -900,20 +966,21 @@ export class Leaderboard {
             </div>
           </div>
           <div class="driver-right">
-            ${entry.isOut ? `<span class="eliminated-label">OUT</span>` : ''}
-            <span class="pit-label" 
-                  data-state="${entry.pitState}"
-                  style="color: rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})">
-            </span>
-            <div class="indicators">
-              <div class="drs-indicator ${isDrsActive ? 'active' : ''}" 
-                   title="DRS ${isDrsActive ? 'Active' : 'Inactive'}">
+            ${entry.isOut ? `<span class="eliminated-label">Out</span>` : `
+              <span class="pit-label" 
+                    data-state="${entry.pitState}"
+                    style="color: rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})">
+              </span>
+              <div class="indicators">
+                <div class="drs-indicator ${isDrsActive ? 'active' : ''}" 
+                     title="DRS ${isDrsActive ? 'Active' : 'Inactive'}">
+                </div>
+                <img src="${tyreImagePath}" 
+                     alt="${tyreName}"
+                     class="tyre-indicator"
+                     title="${tyreName}" />
               </div>
-              <img src="${tyreImagePath}" 
-                   alt="${tyreName}"
-                   class="tyre-indicator"
-                   title="${tyreName}" />
-            </div>
+            `}
           </div>
         `;
       }
@@ -927,68 +994,64 @@ export class Leaderboard {
       // Update dynamic elements separately to preserve transitions
       // Only update pit-related elements in race mode
       if (this.sessionMode === 'race') {
-        const pitLabel = entryEl.querySelector('.pit-label') as HTMLElement;
-        if (pitLabel) {
-          const previousState = pitLabel.dataset.state as PitState || 'NONE';
-          const currentState = entry.pitState;
-          
-          // Update color
-          pitLabel.style.color = `rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})`;
-          
-          // Handle state transitions with fade effects
-          if (previousState !== currentState) {
-            // State has changed - need to handle transition
+        // Handle transition to Out state - need to rebuild the entry
+        const hasOutLabel = entryEl.querySelector('.eliminated-label') !== null;
+        const hasIndicators = entryEl.querySelector('.indicators') !== null;
+        
+        if (entry.isOut && hasIndicators) {
+          // Driver just went Out - rebuild the entry without indicators
+          entryEl.innerHTML = expectedHTML;
+        } else if (!entry.isOut && hasOutLabel && !hasIndicators) {
+          // Driver is no longer Out (e.g., seeking backwards) - rebuild with indicators
+          entryEl.innerHTML = expectedHTML;
+        } else if (!entry.isOut) {
+          // Only update pit/DRS/tyre for active drivers
+          const pitLabel = entryEl.querySelector('.pit-label') as HTMLElement;
+          if (pitLabel) {
+            const previousState = pitLabel.dataset.state as PitState || 'NONE';
+            const currentState = entry.pitState;
             
-            if (currentState === 'NONE') {
-              // Fading out (PIT_EXIT → NONE or IN_PIT → NONE)
-              pitLabel.classList.remove('visible');
-              // Clear text after fade completes
-              setTimeout(() => {
-                if (pitLabel.dataset.state === 'NONE') {
-                  pitLabel.textContent = '';
-                }
-              }, 300); // Match CSS transition duration
-            } else if (previousState === 'NONE') {
-              // Fading in (NONE → IN_PIT or NONE → PIT_EXIT)
-              const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
-              pitLabel.textContent = newText;
-              // Trigger reflow to ensure transition works
-              pitLabel.offsetHeight;
-              pitLabel.classList.add('visible');
-            } else {
-              // Text is changing (IN_PIT → PIT_EXIT or PIT_EXIT → IN_PIT)
-              // Fade out, change text, fade in
-              pitLabel.classList.remove('visible');
-              setTimeout(() => {
+            // Update color
+            pitLabel.style.color = `rgb(${entry.color[0]}, ${entry.color[1]}, ${entry.color[2]})`;
+            
+            // Handle state transitions with fade effects
+            if (previousState !== currentState) {
+              // State has changed - need to handle transition
+              
+              if (currentState === 'NONE') {
+                // Fading out (PIT_EXIT → NONE or IN_PIT → NONE)
+                pitLabel.classList.remove('visible');
+                // Clear text after fade completes
+                setTimeout(() => {
+                  if (pitLabel.dataset.state === 'NONE') {
+                    pitLabel.textContent = '';
+                  }
+                }, 300); // Match CSS transition duration
+              } else if (previousState === 'NONE') {
+                // Fading in (NONE → IN_PIT or NONE → PIT_EXIT)
                 const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
                 pitLabel.textContent = newText;
-                pitLabel.dataset.state = currentState;
-                // Trigger reflow
+                // Trigger reflow to ensure transition works
                 pitLabel.offsetHeight;
                 pitLabel.classList.add('visible');
-              }, 300); // Match CSS transition duration
+              } else {
+                // Text is changing (IN_PIT → PIT_EXIT or PIT_EXIT → IN_PIT)
+                // Fade out, change text, fade in
+                pitLabel.classList.remove('visible');
+                setTimeout(() => {
+                  const newText = currentState === 'IN_PIT' ? 'IN PIT' : 'PIT EXIT';
+                  pitLabel.textContent = newText;
+                  pitLabel.dataset.state = currentState;
+                  // Trigger reflow
+                  pitLabel.offsetHeight;
+                  pitLabel.classList.add('visible');
+                }, 300); // Match CSS transition duration
+              }
             }
+            
+            // Update state tracking
+            pitLabel.dataset.state = currentState;
           }
-          
-          // Update state tracking
-          pitLabel.dataset.state = currentState;
-          
-        }
-        
-        // Handle OUT label (similar to qualifying eliminated label)
-        let outLabel = entryEl.querySelector('.eliminated-label');
-        if (entry.isOut && !outLabel) {
-          // Add OUT label if not present
-          const rightDiv = entryEl.querySelector('.driver-right');
-          if (rightDiv) {
-            const label = document.createElement('span');
-            label.className = 'eliminated-label';
-            label.textContent = 'OUT';
-            rightDiv.insertBefore(label, rightDiv.firstChild);
-          }
-        } else if (!entry.isOut && outLabel) {
-          // Remove OUT label if present but driver not out
-          outLabel.remove();
         }
       }
       
@@ -1019,40 +1082,36 @@ export class Leaderboard {
       
       // Update qualifying times (qualifying mode only)
       if (this.sessionMode === 'qualifying') {
-        const qualiTimeEl = entryEl.querySelector('.quali-time.best-time');
-        
-        if (qualiTimeEl) {
-          // Use LIVE state for times - show full lap time format (e.g., "1:23.456")
-          const liveState = this.liveQualifyingState.get(entry.code);
-          const bestTime = liveState?.bestTimeStr || '-';
-          qualiTimeEl.textContent = bestTime;
-        }
-        
-        // Update tyre indicator in qualifying mode too
-        const tyreIndicator = entryEl.querySelector('.tyre-indicator') as HTMLImageElement;
-        if (tyreIndicator && tyreIndicator.src !== tyreImagePath) {
-          tyreIndicator.src = tyreImagePath;
-          tyreIndicator.alt = tyreName;
-          tyreIndicator.title = tyreName;
-        }
-        
-        // Update eliminated label visibility
         const liveState = this.liveQualifyingState.get(entry.code);
         const isEliminated = liveState?.eliminated || false;
-        let eliminatedLabel = entryEl.querySelector('.eliminated-label');
         
-        if (isEliminated && !eliminatedLabel) {
-          // Add eliminated label if not present
-          const rightDiv = entryEl.querySelector('.driver-right');
-          if (rightDiv) {
-            const label = document.createElement('span');
-            label.className = 'eliminated-label';
-            label.textContent = 'OUT';
-            rightDiv.insertBefore(label, rightDiv.firstChild);
+        // Handle transition to/from eliminated state - need to rebuild the entry
+        const hasOutLabel = entryEl.querySelector('.eliminated-label') !== null;
+        const hasTyreIndicator = entryEl.querySelector('.tyre-indicator') !== null;
+        
+        if (isEliminated && hasTyreIndicator) {
+          // Driver just got eliminated - rebuild the entry without indicators
+          entryEl.innerHTML = expectedHTML;
+        } else if (!isEliminated && hasOutLabel && !hasTyreIndicator) {
+          // Driver is no longer eliminated (e.g., seeking backwards) - rebuild with indicators
+          entryEl.innerHTML = expectedHTML;
+        } else if (!isEliminated) {
+          // Only update time/tyre for active drivers
+          const qualiTimeEl = entryEl.querySelector('.quali-time.best-time');
+          
+          if (qualiTimeEl) {
+            // Use LIVE state for times - show full lap time format (e.g., "1:23.456")
+            const bestTime = liveState?.bestTimeStr || '-';
+            qualiTimeEl.textContent = bestTime;
           }
-        } else if (!isEliminated && eliminatedLabel) {
-          // Remove eliminated label if present but driver not eliminated
-          eliminatedLabel.remove();
+          
+          // Update tyre indicator in qualifying mode too
+          const tyreIndicator = entryEl.querySelector('.tyre-indicator') as HTMLImageElement;
+          if (tyreIndicator && tyreIndicator.src !== tyreImagePath) {
+            tyreIndicator.src = tyreImagePath;
+            tyreIndicator.alt = tyreName;
+            tyreIndicator.title = tyreName;
+          }
         }
       }
     });
