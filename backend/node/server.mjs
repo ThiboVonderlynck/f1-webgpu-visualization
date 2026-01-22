@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import express from 'express';
 import cors from 'cors';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -251,26 +251,72 @@ app.post('/api/fetch', async (req, res) => {
     console.log(`\nFetching F1 data: ${year} Round ${round} (${sessionType})`);
 
     const pythonScript = path.join(__dirname, '../python/fetch_race_data.py');
-    const command = `${PYTHON_CMD} "${pythonScript}" ${year} ${round} ${sessionType}`;
-
-    console.log(`Executing: ${command}`);
-
-    const { stdout, stderr } = await execPromise(command, {
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large outputs
-      timeout: 600000, // 10 minutes timeout (processing 20 drivers with full telemetry takes time)
+    
+    // Use spawn for real-time output streaming
+    const pythonProcess = spawn(PYTHON_CMD, [pythonScript, year.toString(), round.toString(), sessionType]);
+    
+    let stdoutData = '';
+    let stderrData = '';
+    
+    // Stream stdout to all WebSocket clients
+    pythonProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      stdoutData += output;
+      
+      // Broadcast to all connected WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: 'log',
+            message: output.trim(),
+            level: 'info'
+          }));
+        }
+      });
+      
+      // Also log to console
+      process.stdout.write(output);
     });
-
-    // Check for errors in stderr (but allow warnings)
-    if (stderr && stderr.toLowerCase().includes('error:')) {
-      console.error('Python stderr:', stderr);
-      throw new Error(stderr);
-    }
+    
+    pythonProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      stderrData += output;
+      
+      // Broadcast stderr to WebSocket clients (warnings, etc)
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) {
+          // Don't send FastF1 cache INFO/WARNING messages
+          if (!output.includes('INFO:') && !output.includes('WARNING:')) {
+            client.send(JSON.stringify({
+              type: 'log',
+              message: output.trim(),
+              level: 'error'
+            }));
+          }
+        }
+      });
+    });
+    
+    // Wait for process to complete
+    await new Promise((resolve, reject) => {
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python script exited with code ${code}: ${stderrData}`));
+        } else {
+          resolve();
+        }
+      });
+      
+      pythonProcess.on('error', (error) => {
+        reject(error);
+      });
+    });
 
     console.log('✓ Data fetched successfully');
 
     // Parse the JSON output from Python script
     let fileInfo = null;
-    const jsonMatch = stdout.match(/__OUTPUT_JSON__:(.*)/);
+    const jsonMatch = stdoutData.match(/__OUTPUT_JSON__:(.*)/);
     if (jsonMatch) {
       fileInfo = JSON.parse(jsonMatch[1]);
       console.log(`File created: ${fileInfo.file}`);

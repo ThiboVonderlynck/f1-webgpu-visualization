@@ -194,14 +194,16 @@ export class DataFetcher {
           <button class="load-button" id="fetch-button">LOAD DATA & START</button>
         </div>
 
-        <div class="progress-container" id="progress-container">
-          <div class="progress-bar-wrapper">
-            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        <div class="terminal-container" id="terminal-container">
+          <div class="terminal-header">
+            <span class="terminal-title">Console Output</span>
+            <div class="terminal-controls">
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+            </div>
           </div>
-          <div class="progress-text">
-            <span id="progress-status">Fetching data...</span>
-            <span class="progress-percentage" id="progress-percentage">0%</span>
-          </div>
+          <div class="terminal-output" id="terminal-output"></div>
         </div>
 
         <div id="message-container"></div>
@@ -256,13 +258,47 @@ export class DataFetcher {
     });
   }
 
+  private addTerminalLog(message: string, type: 'info' | 'success' | 'error' = 'info') {
+    const terminalOutput = this.container.querySelector('#terminal-output') as HTMLElement;
+    const logLine = document.createElement('div');
+    logLine.className = `terminal-line terminal-${type}`;
+    logLine.textContent = message;
+    terminalOutput.appendChild(logLine);
+    // Auto-scroll to bottom
+    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+  }
+
+  private clearTerminal() {
+    const terminalOutput = this.container.querySelector('#terminal-output') as HTMLElement;
+    terminalOutput.innerHTML = '';
+  }
+
+  private setupWebSocketLogListener() {
+    // Listen for log messages from the WebSocket
+    if ((window as any).wsClient) {
+      const wsClient = (window as any).wsClient;
+      
+      // Add log message handler
+      const originalOnMessage = wsClient.ws?.onmessage;
+      if (wsClient.ws) {
+        wsClient.ws.addEventListener('message', (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'log') {
+              this.addTerminalLog(data.message, data.level === 'error' ? 'error' : 'info');
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+        });
+      }
+    }
+  }
+
   private async handleFetch() {
     const button = this.container.querySelector('#fetch-button') as HTMLButtonElement;
     const messageContainer = this.container.querySelector('#message-container') as HTMLElement;
-    const progressContainer = this.container.querySelector('#progress-container') as HTMLElement;
-    const progressBar = this.container.querySelector('#progress-bar') as HTMLElement;
-    const progressPercentage = this.container.querySelector('#progress-percentage') as HTMLElement;
-    const progressStatus = this.container.querySelector('#progress-status') as HTMLElement;
+    const terminalContainer = this.container.querySelector('#terminal-container') as HTMLElement;
 
     const year = this.selectedYear;
     const round = this.selectedRound;
@@ -277,25 +313,22 @@ export class DataFetcher {
     button.innerHTML = '<span class="loading-spinner"></span>LOADING...';
     messageContainer.innerHTML = '';
 
-    progressContainer.classList.add('active');
-
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-      progress += Math.random() * 15;
-      if (progress > 90) progress = 90;
-      progressBar.style.width = `${progress}%`;
-      progressPercentage.textContent = `${Math.round(progress)}%`;
-    }, 300);
+    // Show terminal and clear previous logs
+    terminalContainer.classList.add('active');
+    this.clearTerminal();
+    
+    // Setup WebSocket listener for Python logs
+    this.setupWebSocketLogListener();
 
     try {
-      progressStatus.textContent = 'Checking data...';
+      this.addTerminalLog('Checking data...', 'info');
       const checkResponse = await fetch(`${API_URL}/check/${year}/${round}/${sessionType}`);
       const checkData = await checkResponse.json();
 
       let needsFetch = !checkData.exists;
 
       if (needsFetch) {
-        progressStatus.textContent = 'Fetching from FastF1...';
+        this.addTerminalLog('Fetching from FastF1...', 'info');
         const fetchResponse = await fetch(`${API_URL}/fetch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -306,9 +339,12 @@ export class DataFetcher {
         if (!fetchData.success) {
           throw new Error(fetchData.error || 'Failed to fetch data');
         }
+        this.addTerminalLog('✓ Data fetched successfully', 'success');
+      } else {
+        this.addTerminalLog('✓ Using cached data', 'success');
       }
 
-      progressStatus.textContent = 'Loading telemetry...';
+      this.addTerminalLog('Loading telemetry...', 'info');
       const loadResponse = await fetch(`${API_URL}/load`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -317,24 +353,21 @@ export class DataFetcher {
 
       const loadData = await loadResponse.json();
 
-      clearInterval(progressInterval);
-      progressBar.style.width = '100%';
-      progressPercentage.textContent = '100%';
-
       if (loadData.success) {
-        progressStatus.textContent = 'Complete!';
+        this.addTerminalLog(`✓ Loaded ${loadData.totalFrames.toLocaleString()} frames`, 'success');
+        this.addTerminalLog(`✓ ${loadData.drivers.length} drivers loaded`, 'success');
+        this.addTerminalLog('Starting visualization...', 'info');
+        
         messageContainer.innerHTML = `
           <div class="message success">
-            ✓ Loaded ${loadData.totalFrames.toLocaleString()} frames • ${loadData.drivers.length} drivers
+            ✓ Data loaded successfully
           </div>
         `;
 
-        // Wait a moment for the success message, then initialize visualization
-        // Use await with a promise-based delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Wait a moment, then initialize visualization
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         if (this.onDataFetched) {
-          progressStatus.textContent = 'Starting visualization...';
           await this.onDataFetched(year, round, sessionType, loadData.track);
           // Only hide after visualization is fully initialized
           this.container.style.display = 'none';
@@ -343,18 +376,13 @@ export class DataFetcher {
         throw new Error(loadData.error || 'Failed to load data');
       }
     } catch (error) {
-      clearInterval(progressInterval);
-      progressStatus.textContent = 'Error';
-      progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #ff4d4d 100%)';
-      messageContainer.innerHTML = `<div class="message error">✗ ${error instanceof Error ? error.message : 'Unknown error'}</div>`;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.addTerminalLog(`✗ Error: ${errorMessage}`, 'error');
+      messageContainer.innerHTML = `<div class="message error">✗ ${errorMessage}</div>`;
       
       // Only re-enable button on error
       button.disabled = false;
       button.textContent = 'LOAD DATA & START';
-      
-      setTimeout(() => {
-        progressContainer.classList.remove('active');
-      }, 3000);
     }
   }
 }

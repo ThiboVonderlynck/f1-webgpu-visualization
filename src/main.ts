@@ -100,6 +100,9 @@ async function initVisualization(trackData: TrackData) {
 
   updateLoadingText('Connecting to server...');
   const wsClient = new WebSocketClient(import.meta.env.VITE_WS_URL || 'ws://localhost:3001');
+  
+  // Make wsClient globally accessible for DataFetcher logging
+  (window as any).wsClient = wsClient;
   const playbackController = new PlaybackController();
   const carRenderer = new CarRenderer(scene);
   const povCamera = new POVCamera(camera);
