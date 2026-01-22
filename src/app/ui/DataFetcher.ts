@@ -316,7 +316,6 @@ export class DataFetcher {
       const wsClient = (window as any).wsClient;
       
       // Add log message handler
-      const originalOnMessage = wsClient.ws?.onmessage;
       if (wsClient.ws) {
         wsClient.ws.addEventListener('message', (event: MessageEvent) => {
           try {
