@@ -1,4 +1,4 @@
-import WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
+import { WebGPURenderer } from 'three/webgpu';
 import * as THREE from 'three';
 
 export function createRenderer() {

@@ -1,4 +1,4 @@
-import type WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
+import type { WebGPURenderer } from 'three/webgpu';
 import type { Scene } from 'three';
 import type { PerspectiveCamera } from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
