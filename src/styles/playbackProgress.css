@@ -353,7 +353,7 @@
    MOBILE RESPONSIVE STYLES
    ============================================================================ */
 
-@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
     .playback-progress-container {
         left: 50%;
         right: auto;
@@ -478,7 +478,7 @@
 }
 
 /* Extra small screens */
-@media (max-width: 480px), (max-height: 400px) and (pointer: coarse) {
+@media (max-width: 480px) {
     .playback-progress-container {
         width: calc(100% - 20px);
         bottom: 50px;

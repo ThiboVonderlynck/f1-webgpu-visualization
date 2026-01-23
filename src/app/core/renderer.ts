@@ -19,3 +19,10 @@ export function createRenderer() {
 
   return renderer;
 }
+
+export function setupRendererResize(renderer: WebGPURenderer): void {
+  window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+  });
+}
