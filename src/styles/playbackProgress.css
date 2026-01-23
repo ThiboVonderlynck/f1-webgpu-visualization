@@ -483,7 +483,7 @@
 @media (max-width: 480px) {
     .playback-progress-container {
         width: calc(100% - 20px);
-        bottom: 100px;
+        bottom: 50px;
     }
 
     /* Ensure controls stay at bottom on small screens */
@@ -491,7 +491,7 @@
     .playback-progress-container:hover .integrated-controls,
     .playback-progress-container .integrated-controls {
         position: fixed !important;
-        bottom: 0px !important;
+        bottom: -45px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         padding-bottom: 5px !important;
