@@ -140,7 +140,7 @@ export class DataFetcher {
         ${this.renderSettings.renderToggleButton()}
         ${this.renderSettings.renderPanel()}
         <div class="data-fetcher-header">
-          <h1>F1 TELEMETRY FETCHER</h1>
+          <h1>F1 VISUALIZATION</h1>
           <div class="divider"></div>
         </div>
 

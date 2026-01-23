@@ -75,13 +75,19 @@
 
 @media (max-width: 768px) {
   .data-fetcher-header h1 {
-    font-size: 24px;
+    font-size: 22px;
   }
 }
 
 @media (max-width: 480px) {
   .data-fetcher-header h1 {
-    font-size: 20px;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .data-fetcher-header h1 {
+    font-size: 16px;
   }
 }
 
@@ -524,6 +530,13 @@
 
 /* Mobile responsive - single column layout */
 @media (max-width: 768px) {
+  .data-fetcher {
+    top: 20px;
+    bottom: 20px;
+    transform: translateX(-50%);
+    max-height: calc(100vh - 40px);
+  }
+
   .option-grid {
     grid-template-columns: 1fr !important;
     max-height: none;
@@ -534,5 +547,15 @@
   .option-grid.races,
   .option-grid.sessions {
     grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .data-fetcher {
+    top: 16px;
+    bottom: 16px;
+    max-height: calc(100vh - 32px);
+    width: calc(100% - 32px);
+    padding: 16px;
   }
 }
