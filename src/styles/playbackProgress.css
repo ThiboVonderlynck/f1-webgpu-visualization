@@ -1,6 +1,6 @@
 .playback-progress-container {
     position: absolute;
-    bottom: 20px;
+    bottom: 110px;
     left: 340px;
     right: 260px;
     height: 70px;
@@ -8,6 +8,9 @@
     user-select: none;
     z-index: 1000;
     overflow: visible;
+    /* Extend clickable/hover area to include controls below */
+    padding-bottom: 60px;
+    margin-bottom: -60px;
 }
 
 .playback-progress-container.dragging {
@@ -213,14 +216,23 @@
 /* Integrated Dashboard Controls */
 .integrated-controls {
     position: absolute;
-    top: -46px;
-    /* Higher than flag segments */
+    bottom: -40px;
+    /* Below the progress bar */
     left: 0;
     width: 100%;
     display: flex;
     justify-content: center;
     pointer-events: none;
     z-index: 50;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Show controls on hover */
+.playback-progress-container:hover .integrated-controls {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .controls-pill {
