@@ -360,7 +360,7 @@
         transform: translateX(-50%);
         width: calc(100% - 30px);
         max-width: 400px;
-        bottom: 100px; /* Higher position above controls */
+        bottom: 50px; /* Just above the controls */
         height: 50px;
         padding-bottom: 0;
         margin-bottom: 0;
@@ -410,7 +410,7 @@
     .playback-progress-container:hover .integrated-controls,
     .playback-progress-container .integrated-controls {
         position: fixed !important;
-        bottom: -10px !important;
+        bottom: -40px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         top: auto !important;
@@ -418,7 +418,7 @@
         opacity: 1 !important;
         z-index: 1001;
         margin: 0 !important;
-        padding-bottom: 15px !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     }
 
     .controls-pill {
@@ -481,7 +481,7 @@
 @media (max-width: 480px) {
     .playback-progress-container {
         width: calc(100% - 20px);
-        bottom: 50px;
+        bottom: 55px;
     }
 
     /* Ensure controls stay at bottom on small screens */
@@ -489,10 +489,10 @@
     .playback-progress-container:hover .integrated-controls,
     .playback-progress-container .integrated-controls {
         position: fixed !important;
-        bottom: -45px !important;
+        bottom: 5px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        padding-bottom: 5px !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     }
 
     .controls-pill {
