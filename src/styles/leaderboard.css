@@ -592,15 +592,21 @@
     max-height: 60vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* Contain scrolling content */
   }
 
   .leaderboard-entries {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    min-height: 0; /* Required for flex children to scroll properly */
+    position: relative;
   }
 
+  /* On mobile, switch to relative positioning for proper scrolling */
   .leaderboard-entry {
+    position: relative !important;
+    transform: none !important;
     min-height: 26px;
     height: 26px;
   }
@@ -647,6 +653,7 @@
 
   .leaderboard-header {
     padding: 6px 10px;
+    flex-shrink: 0; /* Prevent header from shrinking */
   }
 
   .leaderboard-header .f1-logo {
@@ -656,6 +663,15 @@
   .lap-counter {
     padding: 6px 10px;
     font-size: 0.8em;
+    flex-shrink: 0; /* Prevent lap counter from shrinking */
+  }
+
+  .quali-header {
+    flex-shrink: 0; /* Prevent quali header from shrinking */
+  }
+
+  .race-flag-banner {
+    flex-shrink: 0; /* Prevent flag banner from shrinking */
   }
 }
 
@@ -670,6 +686,7 @@
 
   .leaderboard-entry {
     height: 24px;
+    min-height: 24px;
   }
 
   .driver-left {
@@ -707,5 +724,26 @@
 
   .leaderboard.qualifying-mode {
     width: 180px;
+  }
+}
+
+/* Scrollbar styling for mobile */
+@media (max-width: 768px) {
+  .leaderboard-entries::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .leaderboard-entries::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+  }
+
+  .leaderboard-entries::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+  }
+
+  .leaderboard-entries::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
   }
 }
