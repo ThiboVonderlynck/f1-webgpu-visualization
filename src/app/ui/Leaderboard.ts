@@ -922,6 +922,7 @@ export class Leaderboard {
       }
 
       entryEl.style.transform = `translateY(${index * entryHeight}px)`;
+      entryEl.style.setProperty('--position', `${index}`);
 
       const tyreName = this.getTyreCompound(entry.tyre);
       const tyreImagePath = this.getTyreImagePath(entry.tyre);

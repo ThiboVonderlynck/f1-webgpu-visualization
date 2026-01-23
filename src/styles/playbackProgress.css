@@ -346,13 +346,7 @@
 }
 
 .int-time-display {
-    font-size: 12px;
-    font-family: 'Monaco', 'Courier New', monospace;
-    color: #ffffff;
-    margin-left: 12px;
-    padding-left: 12px;
-    border-left: 1px solid rgba(255, 255, 255, 0.2);
-    min-width: 90px;
+    display: none;
 }
 
 /* ============================================================================
@@ -467,8 +461,12 @@
         margin: 0 4px;
     }
 
-    /* Hide mode selector and time on mobile to save space */
-    .int-mode-group,
+    /* Hide mode selector on mobile to save space */
+    .int-mode-group {
+        display: none;
+    }
+
+    /* Hide time display on mobile */
     .int-time-display {
         display: none;
     }

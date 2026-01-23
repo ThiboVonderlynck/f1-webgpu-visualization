@@ -601,6 +601,8 @@
     overflow-x: hidden;
     min-height: 0; /* Required for flex children to scroll properly */
     position: relative;
+    display: flex;
+    flex-direction: column;
   }
 
   /* On mobile, switch to relative positioning for proper scrolling */
@@ -609,6 +611,12 @@
     transform: none !important;
     min-height: 26px;
     height: 26px;
+    order: var(--position, 0); /* Order by position to ensure correct display */
+  }
+
+  /* Limit visible height to approximately 10 entries */
+  .leaderboard-entries {
+    max-height: 230px;
   }
 
   .driver-left {
