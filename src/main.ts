@@ -9,6 +9,7 @@ import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './
 import { POVCamera } from './app/camera/POVCamera';
 import { setDriverTeams } from './app/ui/teamMapping.js';
 import { getRenderSettingsInstance } from './app/ui/RenderSettings.js';
+import Stats from 'stats.js';
 import type { TrackData } from './app/circuit/trackRenderer.js';
 import type { TelemetryMetadata } from './app/playback';
 import './styles/dataFetcher.css';
@@ -259,10 +260,22 @@ async function initVisualization(trackData: TrackData) {
     }
   });
 
+  // FPS Stats panel
+  const stats = new Stats();
+  stats.showPanel(0); // 0: FPS, 1: MS, 2: MB
+  stats.dom.style.position = 'fixed';
+  stats.dom.style.top = '10px';
+  stats.dom.style.right = '10px';
+  stats.dom.style.left = 'auto';
+  stats.dom.style.zIndex = '10000';
+  document.body.appendChild(stats.dom);
+
   startAnimationLoop(renderer, scene, camera, controls, () => {
+    stats.begin();
     if (povCamera.getIsActive()) {
       povCamera.update();
     }
+    stats.end();
   });
 }
 
