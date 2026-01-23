@@ -23,7 +23,6 @@ export class RenderSettings {
   private container: HTMLElement;
   private isOpen: boolean = false;
   private settings: RenderSettingsConfig;
-  private panelElement: HTMLElement | null = null;
   private changeListeners: SettingsChangeCallback[] = [];
 
   constructor(container: HTMLElement) {
