@@ -9,7 +9,7 @@ import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './
 import { POVCamera } from './app/camera/POVCamera';
 import { setDriverTeams } from './app/ui/teamMapping.js';
 import { getRenderSettingsInstance } from './app/ui/RenderSettings.js';
-import Stats from 'stats.js';
+import { Inspector } from 'three/examples/jsm/inspector/Inspector.js';
 import type { TrackData } from './app/circuit/trackRenderer.js';
 import type { TelemetryMetadata } from './app/playback';
 import './styles/dataFetcher.css';
@@ -81,8 +81,13 @@ async function initVisualization(trackData: TrackData) {
 
   updateLoadingText('Initializing 3D engine...');
   const renderer = createRenderer();
+  
+  // Three.js Inspector for WebGPU performance monitoring
+  const inspector = new Inspector();
+  (renderer as any).inspector = inspector;
+  
   await renderer.init();
-
+  
   const scene = createScene();
 
   const camera = createCamera();
@@ -110,16 +115,18 @@ async function initVisualization(trackData: TrackData) {
   const carRenderer = new CarRenderer(scene);
   const povCamera = new POVCamera(camera);
   
+  const uiContainer = document.getElementById('app') || document.body;
+
   const uiOverlayContainer = document.createElement('div');
-  document.body.appendChild(uiOverlayContainer);
+  uiContainer.appendChild(uiOverlayContainer);
   const povOverlay = new POVOverlay(uiOverlayContainer);
 
   const playbackContainer = document.createElement('div');
-  document.body.appendChild(playbackContainer);
+  uiContainer.appendChild(playbackContainer);
   new PlaybackUI(playbackContainer, playbackController, wsClient);
 
   const leaderboardContainer = document.createElement('div');
-  document.body.appendChild(leaderboardContainer);
+  uiContainer.appendChild(leaderboardContainer);
   const leaderboard = new Leaderboard(leaderboardContainer);
 
   if (trackData && trackData.centerline) {
@@ -128,7 +135,7 @@ async function initVisualization(trackData: TrackData) {
 
   // Weather widget
   const weatherContainer = document.createElement('div');
-  document.body.appendChild(weatherContainer);
+  uiContainer.appendChild(weatherContainer);
   const weatherWidget = new WeatherWidget(weatherContainer);
   // Track if cars are ready - queue frames until then
   let carsReady = false;
@@ -260,28 +267,17 @@ async function initVisualization(trackData: TrackData) {
     }
   });
 
-  // FPS Stats panel
-  const stats = new Stats();
-  stats.showPanel(0); // 0: FPS, 1: MS, 2: MB
-  stats.dom.style.position = 'fixed';
-  stats.dom.style.top = '10px';
-  stats.dom.style.right = '10px';
-  stats.dom.style.left = 'auto';
-  stats.dom.style.zIndex = '10000';
-  document.body.appendChild(stats.dom);
-
   startAnimationLoop(renderer, scene, camera, controls, () => {
-    stats.begin();
     if (povCamera.getIsActive()) {
       povCamera.update();
     }
-    stats.end();
   });
 }
 
 function init() {
+  const uiContainer = document.getElementById('app') || document.body;
   const fetcherContainer = document.createElement('div');
-  document.body.appendChild(fetcherContainer);
+  uiContainer.appendChild(fetcherContainer);
 
   new DataFetcher(fetcherContainer, async (year: number, round: number, sessionType: string, trackData: TrackData) => {
     console.log(`✅ Data fetched for ${year} Round ${round} - ${sessionType}`);
