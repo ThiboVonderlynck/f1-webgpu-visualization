@@ -8,7 +8,9 @@ import { POVOverlay } from './app/ui/POVOverlay.js';
 import { WebSocketClient, PlaybackController, PlaybackUI, CarRenderer } from './app/playback';
 import { POVCamera } from './app/camera/POVCamera';
 import { setDriverTeams } from './app/ui/teamMapping.js';
+import { getRenderSettingsInstance } from './app/ui/RenderSettings.js';
 import type { TrackData } from './app/circuit/trackRenderer.js';
+import type { TelemetryMetadata } from './app/playback';
 import './styles/dataFetcher.css';
 import './styles/playbackUI.css';
 import './styles/leaderboard.css';
@@ -130,11 +132,32 @@ async function initVisualization(trackData: TrackData) {
   // Track if cars are ready - queue frames until then
   let carsReady = false;
   let pendingFrame: any = null;
+  let currentMetadata: TelemetryMetadata | null = null;
+
+  // Listen for render settings changes to live-reload cars
+  const renderSettings = getRenderSettingsInstance();
+  if (renderSettings) {
+    renderSettings.onSettingsChange(async (settings) => {
+      if (currentMetadata && carsReady) {
+        console.log('🔄 Render settings changed, reloading cars...');
+        carRenderer.setCarRenderMode(settings.carRenderMode);
+        await carRenderer.initializeCars(currentMetadata);
+      }
+    });
+  }
 
   wsClient.onMetadata(async (metadata) => {
     console.log('📊 Received metadata:', metadata);
+    currentMetadata = metadata;
     updateLoadingText('Loading 3D car models...');
     playbackController.setTotalFrames(metadata.totalFrames);
+    
+    // Apply current render settings before loading cars
+    const currentSettings = renderSettings?.getSettings();
+    if (currentSettings) {
+      carRenderer.setCarRenderMode(currentSettings.carRenderMode);
+    }
+    
     await carRenderer.initializeCars(metadata);
     leaderboard.setDriverColors(metadata.driverColors);
     leaderboard.setTotalLaps(metadata.totalLaps || 0);

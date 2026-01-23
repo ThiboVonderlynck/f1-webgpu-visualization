@@ -1,3 +1,6 @@
+/* Import component styles */
+@import './renderSettings.css';
+
 /* F1 Official Fonts */
 @font-face {
   font-family: 'Formula1';

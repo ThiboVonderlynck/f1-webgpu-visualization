@@ -1,3 +1,5 @@
+import { RenderSettings, type RenderSettingsConfig } from './RenderSettings';
+
 interface Race {
   round: number;
   name: string;
@@ -31,11 +33,13 @@ export class DataFetcher {
   private bearerToken: string = '';
   private isLoadingRaces: boolean = false;
   private isLoadingSessions: boolean = false;
-  private onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void;
+  private onDataFetched?: (year: number, round: number, sessionType: string, trackData: any, renderSettings: RenderSettingsConfig) => void;
+  private renderSettings: RenderSettings;
 
-  constructor(container: HTMLElement, onDataFetched?: (year: number, round: number, sessionType: string, trackData: any) => void) {
+  constructor(container: HTMLElement, onDataFetched?: (year: number, round: number, sessionType: string, trackData: any, renderSettings: RenderSettingsConfig) => void) {
     this.container = container;
     this.onDataFetched = onDataFetched;
+    this.renderSettings = new RenderSettings(container);
     this.init();
   }
 
@@ -133,6 +137,8 @@ export class DataFetcher {
     
     this.container.innerHTML = `
       <div class="data-fetcher">
+        ${this.renderSettings.renderToggleButton()}
+        ${this.renderSettings.renderPanel()}
         <div class="data-fetcher-header">
           <h1>F1 TELEMETRY FETCHER</h1>
           <div class="divider"></div>
@@ -217,6 +223,7 @@ export class DataFetcher {
     `;
 
     this.attachEventListeners();
+    this.renderSettings.attachEventListeners();
   }
 
   private attachEventListeners() {
@@ -425,7 +432,7 @@ export class DataFetcher {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         if (this.onDataFetched) {
-          await this.onDataFetched(year, round, sessionType, loadData.track);
+          await this.onDataFetched(year, round, sessionType, loadData.track, this.renderSettings.getSettings());
           // Only hide after visualization is fully initialized
           this.container.style.display = 'none';
         }

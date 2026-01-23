@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import type { TelemetryFrame, TelemetryMetadata } from './websocketClient';
+import { type CarRenderMode } from '../ui/RenderSettings';
 
 // Team to model path mapping (team keys from metadata.driverTeams)
 const TEAM_MODEL_PATHS: { [teamKey: string]: string } = {
@@ -25,6 +26,7 @@ export class CarRenderer {
   private loadedModels: Map<string, THREE.Object3D> = new Map();
   private cameraMounts: Map<string, THREE.Object3D> = new Map(); // POV camera mount points per driver
   private gltfLoader: GLTFLoader;
+  private carRenderMode: CarRenderMode = 'detailed';
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -37,6 +39,10 @@ export class CarRenderer {
     this.gltfLoader.setDRACOLoader(dracoLoader);
   }
 
+  setCarRenderMode(mode: CarRenderMode): void {
+    this.carRenderMode = mode;
+  }
+
   async initializeCars(metadata: TelemetryMetadata): Promise<void> {
     this.clearCars();
 
@@ -47,75 +53,162 @@ export class CarRenderer {
       });
     }
 
-    // Pre-load all required models
-    const teamsToLoad = new Set<string>();
-    this.driverTeams.forEach((teamKey) => {
-      if (TEAM_MODEL_PATHS[teamKey]) {
-        teamsToLoad.add(teamKey);
-      }
-    });
+    // Pre-load models based on render mode
+    if (this.carRenderMode === 'detailed') {
+      // Load all team-specific models
+      const teamsToLoad = new Set<string>();
+      this.driverTeams.forEach((teamKey) => {
+        if (TEAM_MODEL_PATHS[teamKey]) {
+          teamsToLoad.add(teamKey);
+        }
+      });
 
-    for (const teamKey of teamsToLoad) {
-      try {
-        const model = await this.loadModel(TEAM_MODEL_PATHS[teamKey]);
-        this.loadedModels.set(teamKey, model);
-      } catch (error) {
-        console.error(`Failed to load model for ${teamKey}:`, error);
+      for (const teamKey of teamsToLoad) {
+        try {
+          const model = await this.loadModel(TEAM_MODEL_PATHS[teamKey]);
+          this.loadedModels.set(teamKey, model);
+        } catch (error) {
+          console.error(`Failed to load model for ${teamKey}:`, error);
+        }
       }
+    } else {
+      // Low poly mode - load single base model (Haas - smallest file)
+      await this.loadLowPolyBaseModel();
     }
 
     // Create cars for each driver
-    Object.entries(metadata.driverColors).forEach(([code, rgb]) => {
+    for (const [code, rgb] of Object.entries(metadata.driverColors)) {
       const hexColor = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
       const color = new THREE.Color(hexColor);
       this.driverColors.set(code, color);
 
-      // Get the correct team model for this driver
-      const teamKey = this.driverTeams.get(code);
-      const model = teamKey ? this.loadedModels.get(teamKey) : null;
-
       let carObject: THREE.Object3D;
 
-      if (model) {
-        // Clone the loaded model for this driver
-        carObject = model.clone();
-        
-        // Scale: Real F1 car is 2m wide, model is 2.10 units
-        // Target: 2m * 20 (circuit scale) = 40 units
-        // Scale factor: 40 / 2.10 ≈ 19
-        const scaleFactor = 19;
-        carObject.scale.set(scaleFactor, scaleFactor, scaleFactor);
-        
-        // Calculate Y offset to place car on track surface (Y = 2.0)
-        // Get bounding box of scaled model to find the bottom
-        const box = new THREE.Box3().setFromObject(carObject);
-        const bottomY = box.min.y;
-        const trackSurfaceY = 2.0; // From trackRenderer.ts trackThickness
-        carObject.position.y = trackSurfaceY - bottomY;
-        
-        // Rotate model to face forward
-        carObject.rotation.y = Math.PI / 2;
-        
-        // Extract camera_mount for POV camera (if present in model)
-        carObject.traverse((child) => {
-          if (child.name === 'camera_mount') {
-            this.cameraMounts.set(code, child);
+      if (this.carRenderMode === 'detailed') {
+        // Get the correct team model for this driver
+        const teamKey = this.driverTeams.get(code);
+        const model = teamKey ? this.loadedModels.get(teamKey) : null;
+
+        if (model) {
+          // Clone the loaded model for this driver
+          carObject = model.clone();
+          
+          // Scale: Real F1 car is 2m wide, model is 2.10 units
+          // Target: 2m * 20 (circuit scale) = 40 units
+          // Scale factor: 40 / 2.10 ≈ 19
+          const scaleFactor = 19;
+          carObject.scale.set(scaleFactor, scaleFactor, scaleFactor);
+          
+          // Calculate Y offset to place car on track surface (Y = 2.0)
+          // Get bounding box of scaled model to find the bottom
+          const box = new THREE.Box3().setFromObject(carObject);
+          const bottomY = box.min.y;
+          const trackSurfaceY = 2.0; // From trackRenderer.ts trackThickness
+          carObject.position.y = trackSurfaceY - bottomY;
+          
+          // Rotate model to face forward
+          carObject.rotation.y = Math.PI / 2;
+          
+          // Extract camera_mount for POV camera (if present in model)
+          carObject.traverse((child) => {
+            if (child.name === 'camera_mount') {
+              this.cameraMounts.set(code, child);
+            }
+          });
+        } else {
+          // Fall back to low poly if model not available
+          if (this.lowPolyBaseModel) {
+            carObject = this.createLowPolyCarFromModel(this.lowPolyBaseModel, hexColor);
+          } else {
+            carObject = this.createFallbackLowPolyCar(hexColor);
           }
-        });
+        }
       } else {
-        // Fall back to sphere for teams without models
-        const geometry = new THREE.SphereGeometry(50, 32, 32);
-        const material = new THREE.MeshBasicMaterial({
-          color: hexColor,
-        });
-        carObject = new THREE.Mesh(geometry, material);
-        carObject.position.y = 10;
+        // Low poly mode - use base model with team color
+        if (this.lowPolyBaseModel) {
+          carObject = this.createLowPolyCarFromModel(this.lowPolyBaseModel, hexColor);
+        } else {
+          carObject = this.createFallbackLowPolyCar(hexColor);
+        }
       }
 
       carObject.name = `car-${code}`;
       this.cars.set(code, carObject);
       this.scene.add(carObject);
+    }
+  }
+
+  private lowPolyBaseModel: THREE.Object3D | null = null;
+
+  private async loadLowPolyBaseModel(): Promise<THREE.Object3D | null> {
+    if (this.lowPolyBaseModel) {
+      return this.lowPolyBaseModel;
+    }
+    
+    try {
+      // Use Haas model as base (smallest at 2.5MB)
+      const model = await this.loadModel('/files/Haas.glb');
+      this.lowPolyBaseModel = model;
+      return model;
+    } catch (error) {
+      console.error('Failed to load low-poly base model:', error);
+      return null;
+    }
+  }
+
+  private createLowPolyCarFromModel(baseModel: THREE.Object3D, color: number): THREE.Object3D {
+    const carObject = baseModel.clone();
+    
+    // Apply solid team color to all mesh materials
+    const teamColor = new THREE.Color(color);
+    carObject.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        // Clone material to avoid affecting other cars
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map(() => 
+            new THREE.MeshBasicMaterial({ color: teamColor })
+          );
+        } else {
+          child.material = new THREE.MeshBasicMaterial({ color: teamColor });
+        }
+      }
     });
+    
+    // Scale: Real F1 car is 2m wide, model is 2.10 units
+    const scaleFactor = 19;
+    carObject.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    
+    // Position on track surface
+    const box = new THREE.Box3().setFromObject(carObject);
+    const bottomY = box.min.y;
+    const trackSurfaceY = 2.0;
+    carObject.position.y = trackSurfaceY - bottomY;
+    
+    // Rotate model to face forward
+    carObject.rotation.y = Math.PI / 2;
+    
+    return carObject;
+  }
+
+  private createFallbackLowPolyCar(color: number): THREE.Object3D {
+    // Fallback to simple box shape if model fails to load
+    const group = new THREE.Group();
+    
+    const bodyGeometry = new THREE.BoxGeometry(100, 20, 40);
+    const bodyMaterial = new THREE.MeshBasicMaterial({ color });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 15;
+    group.add(body);
+    
+    const cockpitGeometry = new THREE.BoxGeometry(30, 15, 25);
+    const cockpitMaterial = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+    cockpit.position.set(10, 30, 0);
+    group.add(cockpit);
+    
+    group.position.y = 2.0;
+    
+    return group;
   }
 
   private loadModel(path: string): Promise<THREE.Object3D> {
