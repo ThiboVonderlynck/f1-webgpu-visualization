@@ -582,28 +582,130 @@
   color: #FFD700 !important;
 }
 
-/* Responsive */
+/* Responsive - Mobile */
 @media (max-width: 768px) {
   .leaderboard {
     left: 10px;
     top: 10px;
-    width: 260px;
+    transform: none;
+    width: 200px;
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .leaderboard-entries {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .leaderboard-entry {
-    min-height: 30px;
+    min-height: 26px;
+    height: 26px;
+  }
+
+  .driver-left {
+    height: 26px;
   }
 
   .driver-right {
-    min-width: 60px;
-    font-size: 12px;
+    min-width: 55px;
+    font-size: 11px;
+    height: 26px;
+  }
+
+  .leaderboard-entry .position {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+    line-height: 26px;
+  }
+
+  .leaderboard-entry .driver-code {
+    font-size: 11px;
+  }
+
+  .leaderboard-entry .team-logo {
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+  }
+
+  .team-color-line {
+    height: 16px;
+    margin: 0 6px 0 4px;
   }
 
   .leaderboard.qualifying-mode {
-    width: 240px;
+    width: 200px;
   }
 
   .quali-time {
-    font-size: 11px;
+    font-size: 10px;
+  }
+
+  .leaderboard-header {
+    padding: 6px 10px;
+  }
+
+  .leaderboard-header .f1-logo {
+    height: 22px;
+  }
+
+  .lap-counter {
+    padding: 6px 10px;
+    font-size: 0.8em;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .leaderboard {
+    left: 5px;
+    top: 5px;
+    width: 180px;
+    max-height: 50vh;
+  }
+
+  .leaderboard-entry {
+    height: 24px;
+  }
+
+  .driver-left {
+    height: 24px;
+  }
+
+  .driver-right {
+    height: 24px;
+    min-width: 50px;
+    font-size: 10px;
+    padding: 0 6px;
+  }
+
+  .leaderboard-entry .position {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+    line-height: 24px;
+  }
+
+  .leaderboard-entry .driver-code {
+    font-size: 10px;
+  }
+
+  .leaderboard-entry .team-logo {
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+  }
+
+  .team-color-line {
+    height: 14px;
+    margin: 0 4px;
+  }
+
+  .leaderboard.qualifying-mode {
+    width: 180px;
   }
 }
