@@ -25,6 +25,7 @@ export class PlaybackProgress {
   private streamingModeSelect!: HTMLSelectElement;
   
   private isDragging: boolean = false;
+  private isHoveringMarker: boolean = false;
   private onAction: (action: string, value?: any) => void;
   
   constructor(parent: HTMLElement, onSeek: (frame: number) => void, onAction: (action: string, value?: any) => void) {
@@ -79,20 +80,6 @@ export class PlaybackProgress {
       <div class="markers-container"></div>
       <div class="playhead"></div>
       <div class="playback-tooltip"></div>
-      <div class="playback-legend">
-        <div class="legend-item">
-          <span class="legend-symbol yellow-flag"></span>
-          <span class="legend-label">Yellow</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-symbol red-flag"></span>
-          <span class="legend-label">Red</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-symbol sc-flag"></span>
-          <span class="legend-label">Safety Car</span>
-        </div>
-      </div>
     `;
     
     this.progressFill = this.container.querySelector('.playback-progress-fill') as HTMLElement;
@@ -124,6 +111,7 @@ export class PlaybackProgress {
 
     window.addEventListener('mousemove', (e) => {
       if (!this.isDragging) {
+        if (this.isHoveringMarker) return;
         const rect = this.container.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const progress = x / rect.width;
@@ -148,7 +136,7 @@ export class PlaybackProgress {
 
     // Still keep tooltip update for simple hover
     this.container.addEventListener('mousemove', (e) => {
-      if (this.isDragging) return;
+      if (this.isDragging || this.isHoveringMarker) return;
       const rect = this.container.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const progress = x / rect.width;
@@ -312,6 +300,7 @@ export class PlaybackProgress {
         marker.className = 'event-marker dnf';
         marker.style.left = `${startProgress}%`;
         marker.textContent = '×';
+        this.attachEventMarkerTooltip(marker, event);
         this.markersContainer.appendChild(marker);
       } else {
         const endFrame = event.endFrame || event.frame;
@@ -324,6 +313,7 @@ export class PlaybackProgress {
         segment.className = `flag-segment ${this.getFlagClass(event.type)}`;
         segment.style.left = `${startProgress}%`;
         segment.style.width = `${width}%`;
+        this.attachEventMarkerTooltip(segment, event);
         this.markersContainer.appendChild(segment);
       }
     });
@@ -337,6 +327,41 @@ export class PlaybackProgress {
       case 'vsc': return 'sc';  // Both SC and VSC use same color
       default: return '';
     }
+  }
+
+  private attachEventMarkerTooltip(element: HTMLElement, event: RaceEvent) {
+    const typeLabels: Record<string, string> = {
+      dnf: 'DNF',
+      yellow_flag: 'Yellow Flag',
+      red_flag: 'Red Flag',
+      safety_car: 'Safety Car',
+      vsc: 'Virtual Safety Car'
+    };
+
+    let tooltipText = typeLabels[event.type] || 'Event';
+    if (event.label) tooltipText += `: ${event.label}`;
+    if (event.lap) tooltipText += ` (Lap ${event.lap})`;
+
+    element.addEventListener('mouseenter', (e) => {
+      this.isHoveringMarker = true;
+      const rect = this.container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      
+      this.tooltip.textContent = tooltipText;
+      this.tooltip.style.left = `${x}px`;
+      this.tooltip.style.display = 'block';
+    });
+
+    element.addEventListener('mousemove', (e) => {
+      const rect = this.container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      this.tooltip.style.left = `${x}px`;
+    });
+
+    element.addEventListener('mouseleave', () => {
+      this.isHoveringMarker = false;
+      this.tooltip.style.display = 'none';
+    });
   }
 
   public toggleVisibility() {
