@@ -354,3 +354,170 @@
     border-left: 1px solid rgba(255, 255, 255, 0.2);
     min-width: 90px;
 }
+
+/* ============================================================================
+   MOBILE RESPONSIVE STYLES
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .playback-progress-container {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: calc(100% - 30px);
+        max-width: 400px;
+        bottom: 100px; /* Higher position above controls */
+        height: 50px;
+        padding-bottom: 0;
+        margin-bottom: 0;
+        overflow: visible;
+    }
+
+    .playback-progress-bar {
+        top: 10px;
+        height: 16px;
+        border-radius: 8px;
+    }
+
+    .playback-progress-fill {
+        border-radius: 8px 0 0 8px;
+    }
+
+    .lap-marker {
+        top: 10px;
+        height: 16px;
+    }
+
+    .lap-number {
+        top: 30px;
+        font-size: 7px;
+    }
+
+    .playhead {
+        top: 7px;
+        height: 22px;
+        width: 2px;
+    }
+
+    .flag-segment {
+        top: 3px;
+        height: 6px;
+        min-width: 4px;
+        border-radius: 3px;
+    }
+
+    /* Hide legend on mobile - takes too much space */
+    .playback-legend {
+        display: none;
+    }
+
+    /* Controls always visible on mobile - fixed at bottom of screen */
+    .integrated-controls,
+    .playback-progress-container:hover .integrated-controls,
+    .playback-progress-container .integrated-controls {
+        position: fixed !important;
+        bottom: -10px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        top: auto !important;
+        width: auto !important;
+        opacity: 1 !important;
+        z-index: 1001;
+        margin: 0 !important;
+        padding-bottom: 15px !important;
+    }
+
+    .controls-pill {
+        gap: 8px;
+        padding: 5px 12px;
+        border-radius: 20px;
+    }
+
+    .int-ctrl-btn {
+        padding: 3px;
+    }
+
+    .int-ctrl-btn img {
+        width: 18px;
+        height: 18px;
+    }
+
+    .int-ctrl-btn.main-play {
+        padding: 6px;
+    }
+
+    .int-ctrl-btn.main-play img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .int-speed-group {
+        gap: 4px;
+        padding: 2px 6px;
+        border-radius: 10px;
+    }
+
+    .int-speed-text {
+        font-size: 9px;
+        min-width: 28px;
+    }
+
+    .int-divider {
+        height: 16px;
+        margin: 0 4px;
+    }
+
+    /* Hide mode selector and time on mobile to save space */
+    .int-mode-group,
+    .int-time-display {
+        display: none;
+    }
+
+    .playback-tooltip {
+        font-size: 10px;
+        padding: 6px 10px;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .playback-progress-container {
+        width: calc(100% - 20px);
+        bottom: 100px;
+    }
+
+    /* Ensure controls stay at bottom on small screens */
+    .integrated-controls,
+    .playback-progress-container:hover .integrated-controls,
+    .playback-progress-container .integrated-controls {
+        position: fixed !important;
+        bottom: 0px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        padding-bottom: 5px !important;
+    }
+
+    .controls-pill {
+        gap: 6px;
+        padding: 4px 10px;
+    }
+
+    .int-ctrl-btn img {
+        width: 16px;
+        height: 16px;
+    }
+
+    .int-ctrl-btn.main-play img {
+        width: 18px;
+        height: 18px;
+    }
+
+    .int-speed-group {
+        padding: 2px 5px;
+    }
+
+    .int-speed-text {
+        font-size: 8px;
+        min-width: 24px;
+    }
+}
