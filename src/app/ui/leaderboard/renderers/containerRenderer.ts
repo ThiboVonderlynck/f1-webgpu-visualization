@@ -6,7 +6,10 @@ import type { SessionMode } from '../types';
 export function renderLeaderboardContainer(sessionMode: SessionMode): string {
   if (sessionMode === 'qualifying') {
     return `
-      <div class="leaderboard-header quali-header">
+      <div class="leaderboard-header">
+        <img src="/images/logos/F1.svg" alt="F1" class="f1-logo" />
+      </div>
+      <div class="quali-header">
         <span class="quali-phase q1">Q1</span>
         <span class="quali-timer">--:--</span>
       </div>
@@ -18,11 +21,12 @@ export function renderLeaderboardContainer(sessionMode: SessionMode): string {
   // Race mode
   return `
     <div class="leaderboard-header">
-      <span class="lap-counter">
-        <span class="lap-label">LAP </span>
-        <span class="lap-current">0</span>
-        <span class="lap-total">/ 0</span>
-      </span>
+      <img src="/images/logos/F1.svg" alt="F1" class="f1-logo" />
+    </div>
+    <div class="lap-counter">
+      <span class="lap-label">LAP </span>
+      <span class="lap-current">0</span>
+      <span class="lap-total">/ 0</span>
     </div>
     <div class="race-flag-banner"></div>
     <div class="leaderboard-entries"></div>
@@ -33,13 +37,14 @@ export function renderLeaderboardContainer(sessionMode: SessionMode): string {
  * Update the lap counter display
  */
 export function updateLapCounter(container: HTMLElement, currentLap: number, totalLaps: number): void {
-  const lapCounterEl = container.querySelector('.lap-counter');
-  if (lapCounterEl) {
-    lapCounterEl.innerHTML = `
-      <span class="lap-label">LAP </span>
-      <span class="lap-current">${currentLap}</span>
-      <span class="lap-total">/ ${totalLaps}</span>
-    `;
+  const lapCurrentEl = container.querySelector('.lap-current');
+  const lapTotalEl = container.querySelector('.lap-total');
+  
+  if (lapCurrentEl) {
+    lapCurrentEl.textContent = `${currentLap}`;
+  }
+  if (lapTotalEl) {
+    lapTotalEl.textContent = `/ ${totalLaps}`;
   }
 }
 

@@ -2,7 +2,7 @@ import { PlaybackController } from './playbackController';
 import type { PlaybackState } from './playbackController';
 import { WebSocketClient } from './websocketClient';
 import type { TelemetryMetadata } from './websocketClient';
-import { PlaybackProgress } from '../ui/PlaybackProgress';
+import { PlaybackProgress } from '../ui/playbackProgress/index';
 import type { RaceEvent } from './websocketClient';
 
 export class PlaybackUI {
