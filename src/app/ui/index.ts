@@ -14,4 +14,4 @@ export {
   getTeamColorClass, 
   getDriverName, 
   setDriverTeams 
-} from './TeamMapping';
+} from './TeamMapping.js';
