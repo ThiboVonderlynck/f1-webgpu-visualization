@@ -107,6 +107,18 @@ Je ziet:
 
 Open **http://localhost:5173** in een WebGPU-compatibele browser (Chrome 113+ of Edge 113+).
 
+#### ⚠️ WebGPU inschakelen (indien nodig)
+
+Als je een foutmelding krijgt dat WebGPU niet ondersteund wordt, moet je het handmatig inschakelen:
+
+1. Open een nieuw tabblad en ga naar `chrome://flags`
+2. Zoek naar **"WebGPU"**
+3. Zet **beide** WebGPU opties op **"Enabled"**:
+   - `WebGPU`
+   - `WebGPU Developer Features` (optioneel, voor debugging)
+4. Klik op **"Relaunch"** om Chrome te herstarten
+5. Open de applicatie opnieuw
+
 ---
 
 ### 🔄 Snelle Start (TL;DR)
