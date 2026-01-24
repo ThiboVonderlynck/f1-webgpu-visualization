@@ -1,5 +1,5 @@
 import type { TelemetryFrame } from '../playback/websocketClient';
-import { getDriverName } from '../ui/teamMapping';
+import { getDriverName } from './TeamMapping.js';
 import '../../styles/povOverlay.css';
 
 export class POVOverlay {
