@@ -123,6 +123,11 @@ export class Visualizer {
     this.playbackController = new PlaybackController();
     this.carRenderer = new CarRenderer(this.scene);
     this.povCamera = new POVCamera(this.camera);
+
+    // Reset interpolation when seeking to prevent cars from flying
+    this.playbackController.onSeek(() => {
+      this.carRenderer.resetInterpolation();
+    });
   }
 
   private initUI(trackData: TrackData): void {
@@ -194,6 +199,21 @@ export class Visualizer {
         this.exitPOV();
       }
     });
+
+    // Streaming mode changes - update interpolation interval
+    this.wsClient.onModeChange((_mode, config) => {
+      if (config?.interval) {
+        console.log(`📡 Updating interpolation interval to ${config.interval}ms`);
+        this.carRenderer.setUpdateInterval(config.interval);
+      }
+    });
+
+    // Interpolation toggle from dropdown (for comparing with/without smoothing)
+    window.addEventListener('interpolation-mode-change', ((event: CustomEvent) => {
+      const { enabled } = event.detail;
+      console.log(`🔀 Interpolation mode: ${enabled ? 'enabled' : 'disabled'}`);
+      this.carRenderer.setInterpolationEnabled(enabled);
+    }) as EventListener);
   }
 
   private async handleMetadata(metadata: TelemetryMetadata, renderSettings: any): Promise<void> {
@@ -299,7 +319,10 @@ export class Visualizer {
   }
 
   private startAnimation(): void {
-    startAnimationLoop(this.renderer, this.scene, this.camera, this.controls, () => {
+    startAnimationLoop(this.renderer, this.scene, this.camera, this.controls, (deltaTime: number) => {
+      // Update car interpolation every frame
+      this.carRenderer.update(deltaTime);
+
       if (this.povCamera.getIsActive()) {
         this.povCamera.update();
       }

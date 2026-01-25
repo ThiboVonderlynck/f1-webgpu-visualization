@@ -5,6 +5,7 @@ export class PlaybackController {
   private totalFrames: number = 0;
 
   private onStateChangeCallback?: (state: PlaybackState) => void;
+  private onSeekCallback?: () => void;
 
   getState(): PlaybackState {
     return {
@@ -48,6 +49,7 @@ export class PlaybackController {
 
   seekToFrame(frameNumber: number): void {
     this.currentFrame = Math.max(0, Math.min(frameNumber, this.totalFrames - 1));
+    this.onSeekCallback?.();
     this.notifyStateChange();
   }
 
@@ -74,6 +76,10 @@ export class PlaybackController {
 
   onStateChange(callback: (state: PlaybackState) => void): void {
     this.onStateChangeCallback = callback;
+  }
+
+  onSeek(callback: () => void): void {
+    this.onSeekCallback = callback;
   }
 
   private notifyStateChange(): void {

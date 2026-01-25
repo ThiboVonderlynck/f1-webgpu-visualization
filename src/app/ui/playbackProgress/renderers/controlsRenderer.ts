@@ -27,9 +27,15 @@ export function renderControls(): string {
         <div class="int-divider"></div>
         <div class="int-mode-group">
           <select id="int-streaming-mode" class="int-mode-select" title="Streaming Mode">
-            <option value="replay">Replay (25 FPS)</option>
-            <option value="live">Live Sim (270ms)</option>
-            <option value="polling">Polling (500ms)</option>
+            <optgroup label="With Interpolation">
+              <option value="replay">Replay (25 FPS)</option>
+              <option value="live">Live Sim (270ms)</option>
+              <option value="polling">Polling (500ms)</option>
+            </optgroup>
+            <optgroup label="Direct (No Smoothing)">
+              <option value="live-direct">Live Direct (270ms)</option>
+              <option value="polling-direct">Polling Direct (500ms)</option>
+            </optgroup>
           </select>
         </div>
         <div id="int-time-display" class="int-time-display">00:00 / 00:00</div>

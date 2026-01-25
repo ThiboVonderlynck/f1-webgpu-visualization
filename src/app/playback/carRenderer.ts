@@ -28,6 +28,13 @@ export class CarRenderer {
   private gltfLoader: GLTFLoader;
   private carRenderMode: CarRenderMode = 'detailed';
 
+  // Buffered interpolation state
+  private prevFrameData: Map<string, { x: number; y: number; rotation: number }> = new Map();
+  private currFrameData: Map<string, { x: number; y: number; rotation: number }> = new Map();
+  private interpolationProgress: number = 1.0; // 0 to 1, starts at 1 (fully at curr)
+  private expectedIntervalMs: number = 270; // Default to live mode (270ms)
+  private useInterpolation: boolean = true; // Toggle for interpolation vs direct mode
+
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     
@@ -269,38 +276,145 @@ export class CarRenderer {
     });
   }
 
+  /**
+   * Reset interpolation buffer - call this when seeking to prevent cars from flying.
+   */
+  resetInterpolation(): void {
+    this.prevFrameData.clear();
+    this.currFrameData.clear();
+    this.interpolationProgress = 1.0;
+  }
+
+  /**
+   * Set the expected update interval (in ms) based on streaming mode.
+   * This controls how fast the interpolation runs.
+   */
+  setUpdateInterval(intervalMs: number): void {
+    this.expectedIntervalMs = intervalMs;
+  }
+
+  /**
+   * Enable or disable interpolation (for direct mode comparison).
+   */
+  setInterpolationEnabled(enabled: boolean): void {
+    this.useInterpolation = enabled;
+    if (!enabled) {
+      // Clear buffer when switching to direct mode
+      this.resetInterpolation();
+    }
+  }
+
+  /**
+   * Receive a new frame from the server.
+   * This buffers the data for interpolation (1-frame lag).
+   */
   updatePositions(frame: TelemetryFrame): void {
+    // Direct mode: apply positions immediately (no interpolation)
+    if (!this.useInterpolation) {
+      Object.entries(frame.drivers).forEach(([code, driver]) => {
+        const car = this.cars.get(code);
+        if (car) {
+          const prevX = car.position.x;
+          const prevZ = car.position.z;
+          
+          car.position.set(driver.x, car.position.y, driver.y);
+          
+          // Calculate heading based on movement direction
+          const dx = driver.x - prevX;
+          const dz = driver.y - prevZ;
+          
+          if (Math.abs(dx) > 0.1 || Math.abs(dz) > 0.1) {
+            const targetRotation = Math.atan2(dx, dz);
+            let rotationDiff = targetRotation - car.rotation.y;
+            while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
+            while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
+            car.rotation.y += rotationDiff * 0.3;
+          }
+        }
+      });
+      return;
+    }
+
+    // Interpolation mode: buffer frames
+    // Shift buffer: current becomes previous
+    this.prevFrameData = new Map(this.currFrameData);
+
+    // Store new data as current
     Object.entries(frame.drivers).forEach(([code, driver]) => {
-      const car = this.cars.get(code);
-      if (car) {
-        // Store previous position for rotation calculation
-        const prevX = car.position.x;
-        const prevZ = car.position.z;
-        
-        // Telemetry Y maps to Three.js Z coordinate
-        car.position.set(driver.x, car.position.y, driver.y);
-        
-        // Calculate heading based on movement direction (for 3D models)
-        const dx = driver.x - prevX;
-        const dz = driver.y - prevZ;
-        
-        // Only update rotation if there's significant movement
+      const prevData = this.currFrameData.get(code);
+      let rotation = 0;
+
+      // Calculate heading from previous position to new position
+      if (prevData) {
+        const dx = driver.x - prevData.x;
+        const dz = driver.y - prevData.y;
         if (Math.abs(dx) > 0.1 || Math.abs(dz) > 0.1) {
-          const targetRotation = Math.atan2(dx, dz);
-          
-          // Smooth rotation
-          const currentRotation = car.rotation.y;
-          const rotationDiff = targetRotation - currentRotation;
-          
-          // Normalize rotation difference to [-PI, PI]
-          let normalizedDiff = rotationDiff;
-          while (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
-          while (normalizedDiff < -Math.PI) normalizedDiff += Math.PI * 2;
-          
-          // Apply smoothed rotation
-          car.rotation.y += normalizedDiff * 0.3;
+          rotation = Math.atan2(dx, dz);
+        } else {
+          rotation = prevData.rotation; // Keep previous rotation if not moving
         }
       }
+
+      this.currFrameData.set(code, {
+        x: driver.x,
+        y: driver.y,
+        rotation
+      });
+
+      // Initialize car position on first frame
+      if (!prevData) {
+        const car = this.cars.get(code);
+        if (car) {
+          car.position.x = driver.x;
+          car.position.z = driver.y;
+        }
+      }
+    });
+
+    // Reset interpolation progress for the new segment
+    this.interpolationProgress = 0;
+  }
+
+  /**
+   * Continuous update loop for car interpolation.
+   * Called every frame from the animation loop.
+   */
+  update(deltaTime: number): void {
+    // Skip if interpolation is disabled (direct mode)
+    if (!this.useInterpolation) {
+      return;
+    }
+
+    // Advance interpolation progress based on expected interval
+    const progressPerSecond = 1000 / this.expectedIntervalMs;
+    this.interpolationProgress = Math.min(1.0, this.interpolationProgress + deltaTime * progressPerSecond);
+
+    const t = this.interpolationProgress;
+
+    this.cars.forEach((car, code) => {
+      const prev = this.prevFrameData.get(code);
+      const curr = this.currFrameData.get(code);
+
+      if (!prev || !curr) {
+        // Not enough data yet, just use current if available
+        if (curr) {
+          car.position.x = curr.x;
+          car.position.z = curr.y;
+          car.rotation.y = curr.rotation;
+        }
+        return;
+      }
+
+      // Interpolate position
+      car.position.x = prev.x + (curr.x - prev.x) * t;
+      car.position.z = prev.y + (curr.y - prev.y) * t;
+
+      // Interpolate rotation (shortest path)
+      let rotationDiff = curr.rotation - prev.rotation;
+      while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
+      while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
+
+      car.rotation.y = prev.rotation + rotationDiff * t;
     });
   }
 

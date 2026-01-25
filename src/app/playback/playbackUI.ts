@@ -78,7 +78,22 @@ export class PlaybackUI {
         break;
       case 'changeStreamingMode':
         console.log(`🔄 Streaming mode changed to: ${value}`);
-        this.wsClient.setStreamingMode(value);
+        // Handle direct (no interpolation) vs interpolated modes
+        if (value.endsWith('-direct')) {
+          // Direct mode: strip suffix and send base mode to server
+          const baseMode = value.replace('-direct', '');
+          this.wsClient.setStreamingMode(baseMode as 'replay' | 'live' | 'polling');
+          // Emit event for interpolation toggle (will be handled by Visualizer)
+          window.dispatchEvent(new CustomEvent('interpolation-mode-change', { 
+            detail: { enabled: false, mode: baseMode } 
+          }));
+        } else {
+          // Interpolated mode
+          this.wsClient.setStreamingMode(value as 'replay' | 'live' | 'polling');
+          window.dispatchEvent(new CustomEvent('interpolation-mode-change', { 
+            detail: { enabled: true, mode: value } 
+          }));
+        }
         break;
     }
   }
