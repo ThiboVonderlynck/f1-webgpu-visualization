@@ -55,11 +55,6 @@ export class TrackRenderer {
     await this.renderBoundaries(trackData.boundaries);
     this.renderDRSZones(trackData);
     
-    // Always use finish_line (timing line from fastest lap) - grid_line is incorrectly calculated
-    // from lap 1 telemetry which starts AT the timing line, not at the starting grid
-    const primaryLine = trackData.finish_line;
-    await this.renderLine(primaryLine, trackData.track_width, 'start-finish-line');
-    
     console.log(`✓ Track rendered: ${trackData.centerline.x.length} points, ${trackData.drs_zones?.length || 0} DRS zones`);
   }
 
@@ -297,45 +292,6 @@ export class TrackRenderer {
     console.log(`✓ Rendered ${trackData.drs_zones.length} DRS zones (green flat ribbons)`);
   }
 
-  private async renderLine(lineData: any, width: number, name: string): Promise<void> {
-    if (!lineData || !lineData.normal) {
-      console.warn(`⚠️ ${name}: Missing line data or normal vector`);
-      return;
-    }
-
-    const { x, y, tangent: t } = lineData;
-    const thickness = 50;
-
-    // Create plane: width spans across the track (perpendicular), thickness along track direction
-    const geometry = new THREE.PlaneGeometry(width, thickness);
-
-    const textureLoader = new THREE.TextureLoader();
-    const lineTexture = await textureLoader.loadAsync('/images/finish_line.png');
-    lineTexture.colorSpace = THREE.SRGBColorSpace;
-
-    const material = new THREE.MeshBasicMaterial({ 
-      map: lineTexture,
-      transparent: true,
-      opacity: 1.0,
-      side: THREE.DoubleSide
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, 4.3, y);
-
-    // Rotate to lie flat on the ground (face up)
-    mesh.rotation.x = -Math.PI / 2;
-    
-    // Calculate the angle from the tangent vector to rotate around Y axis
-    // tangent.x and tangent.y define the direction along the track
-    // We want the plane's "length" (thickness dimension) to align with tangent
-    const angle = Math.atan2(t.x, t.y);
-    mesh.rotation.z = angle;
-
-    mesh.name = name;
-    this.trackGroup.add(mesh);
-    console.log(`🏁 ${name} rendered with texture at (${x.toFixed(2)}, ${y.toFixed(2)}), angle: ${(angle * 180 / Math.PI).toFixed(1)}°`);
-  }
 
   getBounds(): { min: THREE.Vector3; max: THREE.Vector3 } | null {
     const box = new THREE.Box3().setFromObject(this.trackGroup);
