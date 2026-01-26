@@ -60,13 +60,9 @@ export class DataFetcher {
   }
 
   private async init(): Promise<void> {
-    // Load initial data
+    // Load only years list - don't auto-fetch races for faster initial load
     this.years = await raceDataApi.getYears();
-    this.selectedYear = this.years[0] || 2024;
-    
-    this.races = await raceDataApi.getRaces(this.selectedYear);
-    this.cachedRaces = await raceDataApi.getCachedStatus(this.selectedYear);
-    this.sessions = await raceDataApi.getSessions(this.selectedYear, this.selectedRound);
+    this.selectedYear = 0; // No year selected initially
     
     this.render();
   }
@@ -99,6 +95,15 @@ export class DataFetcher {
     this.terminal.init();
     this.attachEventListeners();
     this.renderSettings.attachEventListeners();
+    this.updateButtonState();
+  }
+
+  private updateButtonState(): void {
+    const button = this.container.querySelector('#fetch-button') as HTMLButtonElement;
+    if (!button) return;
+
+    const isValid = this.selectedYear !== 0 && this.selectedRound !== 0 && this.selectedSession !== '';
+    button.disabled = !isValid;
   }
 
   private attachEventListeners(): void {
@@ -169,6 +174,7 @@ export class DataFetcher {
     this.cachedRaces = await raceDataApi.getCachedStatus(this.selectedYear);
     this.isLoadingRaces = false;
     this.render();
+    this.updateButtonState();
   }
 
   private async handleRaceSelect(round: number): Promise<void> {
@@ -188,6 +194,7 @@ export class DataFetcher {
     
     this.isLoadingSessions = false;
     this.render();
+    this.updateButtonState();
   }
 
   private handleSessionSelect(sessionCode: string): void {
@@ -197,6 +204,7 @@ export class DataFetcher {
     });
     const selected = this.container.querySelector(`.option-card[data-type="session"][data-value="${sessionCode}"]`);
     selected?.classList.add('selected');
+    this.updateButtonState();
   }
 
   private async handleFetch(): Promise<void> {
