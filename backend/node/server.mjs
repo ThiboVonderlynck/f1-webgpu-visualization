@@ -315,24 +315,9 @@ app.post('/api/fetch', async (req, res) => {
     
     // Wait for process to complete
     await new Promise((resolve, reject) => {
-      const summarizeOutput = (text, maxLength = 2000) => {
-        if (!text) return '';
-        if (text.length <= maxLength) return text.trim();
-        return text.slice(-maxLength).trim();
-      };
-
-      pythonProcess.on('close', (code, signal) => {
+      pythonProcess.on('close', (code) => {
         if (code !== 0) {
-          const stderrSummary = summarizeOutput(stderrData);
-          const stdoutSummary = summarizeOutput(stdoutData);
-          const processState = signal
-            ? `terminated by signal ${signal}`
-            : `exited with code ${code}`;
-          reject(
-            new Error(
-              `Python script ${processState}. stderr: ${stderrSummary || '(empty)'} stdout: ${stdoutSummary || '(empty)'}`
-            )
-          );
+          reject(new Error(`Python script exited with code ${code}: ${stderrData}`));
         } else {
           resolve();
         }
