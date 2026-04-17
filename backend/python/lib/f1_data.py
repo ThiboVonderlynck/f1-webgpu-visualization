@@ -15,6 +15,23 @@ import pandas as pd
 FPS = 25
 DT = 1 / FPS
 
+DEFAULT_MAX_WORKERS = 4
+
+
+def _get_parallel_worker_count(driver_count):
+    """Pick a safe worker count for constrained hosts (override with F1_MAX_WORKERS)."""
+    env_value = os.getenv("F1_MAX_WORKERS")
+    if env_value is not None:
+        try:
+            requested = int(env_value)
+            if requested > 0:
+                return min(requested, driver_count)
+        except ValueError:
+            # Fall back to safe default when env var is invalid.
+            pass
+
+    return min(DEFAULT_MAX_WORKERS, cpu_count(), driver_count)
+
 def enable_cache():
     """Enable FastF1 caching (centralized in backend/python/.fastf1-cache)"""
     lib_dir = os.path.dirname(os.path.abspath(__file__))
@@ -440,10 +457,10 @@ def get_race_telemetry(session, session_type='R', use_cache=True):
     global_t_max = None
     max_lap_number = 0
     
-    # Multiprocessing with full CPU power (Railway paid tier has enough RAM)
+    # Use a bounded worker count to reduce OOM risk on constrained hosts.
     print(f"Processing {len(drivers)} drivers in parallel...")
     driver_args = [(driver_no, session, driver_codes[driver_no]) for driver_no in drivers]
-    num_processes = min(cpu_count(), len(drivers))  # Use all available CPUs
+    num_processes = _get_parallel_worker_count(len(drivers))
     
     print(f"Using {num_processes} parallel workers...")
     
